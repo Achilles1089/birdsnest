@@ -291,14 +291,21 @@ function connectWebSocket() {
                         </div>`;
                     }
 
-                    // Check if result is image search results (structured JSON)
-                    let isImageGrid = false;
+                    // Check if result is structured JSON (image search or web search)
                     try {
                         const parsed = JSON.parse(data.result);
                         if (parsed.type === 'image_results' && parsed.images) {
-                            isImageGrid = true;
                             const gridHtml = renderImageGrid(parsed);
                             resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🖼️</span> Image search: ${parsed.query}</div>${gridHtml}`;
+                            textEl.appendChild(resultEl);
+                            textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
+                            scrollToBottom();
+                            setStatus('Generating...', 'yellow');
+                            break;
+                        }
+                        if (parsed.type === 'search_results' && parsed.results) {
+                            const cardsHtml = renderSearchCards(parsed);
+                            resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🔍</span> Search: ${parsed.query}</div>${cardsHtml}`;
                             textEl.appendChild(resultEl);
                             textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                             scrollToBottom();
@@ -372,6 +379,25 @@ function renderImageGrid(data) {
     }).join('');
     return `<div class="image-search-grid">${cards}</div>
             <div class="image-search-meta">${data.count} images found for "${data.query}"</div>`;
+}
+
+// ── Web Search Result Cards ───────────────────────────────────
+function renderSearchCards(data) {
+    const cards = data.results.map(r => {
+        const title = (r.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const domain = (r.domain || '').replace(/</g, '&lt;');
+        const favicon = r.favicon || '';
+        return `<a class="search-result-card" href="${r.url}" target="_blank" rel="noopener">
+            <div class="search-result-header">
+                ${favicon ? `<img class="search-result-favicon" src="${favicon}" alt="" width="16" height="16" onerror="this.style.display='none'">` : ''}
+                <span class="search-result-domain">${domain}</span>
+            </div>
+            <div class="search-result-title">${title}</div>
+            ${snippet ? `<div class="search-result-snippet">${snippet}</div>` : ''}
+        </a>`;
+    }).join('');
+    return `<div class="search-results-list">${cards}</div>`;
 }
 
 function addSystemMessage(text, type = 'info') {
