@@ -110,7 +110,15 @@ function connectWebSocket() {
 
                     const resultEl = document.createElement('div');
                     resultEl.className = 'tool-result';
-                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${data.result}</pre>`;
+
+                    // Check if result contains an image URL
+                    const imgMatch = data.result && data.result.match(/URL:\s*(\/workspace\/\S+)/);
+                    let imageHtml = '';
+                    if (imgMatch) {
+                        imageHtml = `<img src="${imgMatch[1]}" alt="Generated image" style="max-width:100%;border-radius:8px;margin-top:8px;">`;
+                    }
+
+                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${data.result}</pre>${imageHtml}`;
                     textEl.appendChild(resultEl);
                     textEl.innerHTML += '<span class="typing-indicator"></span>';
                     scrollToBottom();
@@ -780,6 +788,9 @@ function handleToolInput(event, input) {
         message = `read file ${value}`;
     } else if (action === 'python') {
         message = `run python ${value}`;
+    } else if (action === 'database') {
+        // "path: SQL" format → "query database path: SQL"
+        message = `query database ${value}`;
     } else if (prefix === 'translate ') {
         // "translate hello to spanish" — value should contain "text to lang"
         message = `translate ${value}`;

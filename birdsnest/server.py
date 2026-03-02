@@ -526,6 +526,11 @@ async def serve_index():
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
+# Mount workspace for generated images
+WORKSPACE_SERVE = Path.home() / "birdsnest_workspace"
+if WORKSPACE_SERVE.exists():
+    app.mount("/workspace", StaticFiles(directory=str(WORKSPACE_SERVE)), name="workspace")
+
 
 # ── Entry Point ─────────────────────────────────────────────────────────────
 

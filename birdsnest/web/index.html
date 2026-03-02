@@ -139,14 +139,18 @@
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
 
-            <!-- Disabled / Coming Soon -->
-            <button class="tool-card disabled" disabled>
+            <!-- Image Gen + Database — now active -->
+            <button class="tool-card" data-tool="input" data-prefix="generate an image of "
+                data-placeholder="a sunset over mountains" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎨</span><span class="tool-name">Image Gen</span>
-                <span class="tool-badge">Soon</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="a sunset..."
+                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card disabled" disabled>
+            <button class="tool-card" data-tool="input" data-prefix="query database "
+                data-placeholder="db.sqlite: SELECT *" data-action="database" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🗄️</span><span class="tool-name">Database</span>
-                <span class="tool-badge">Soon</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path: SQL"
+                        onkeydown="handleToolInput(event, this)"></div>
             </button>
         </div>
 

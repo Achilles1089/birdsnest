@@ -396,6 +396,29 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
     if trans_m and 'translate' in _tools and _tools['translate'].enabled:
         return ('translate', {'text': trans_m.group(1).strip().strip('"\''), 'to': trans_m.group(2).strip()})
 
+    # ── Image Generation ──
+    img_patterns = [
+        (r'(?:generate|create|make|draw|paint) (?:an? )?(?:image|picture|photo|art|illustration) (?:of |about |showing )?(.+)', 1),
+        (r'(?:generate|create|make|draw|paint) (.+)', 1),
+        (r'imagine (.+)', 1),
+    ]
+    for pattern, group in img_patterns:
+        m = re.search(pattern, msg)
+        if m and 'generate_image' in _tools and _tools['generate_image'].enabled:
+            prompt = m.group(group).strip().rstrip('.')
+            if prompt and len(prompt) > 3:  # Avoid triggering on "make it" etc
+                return ('generate_image', {'prompt': prompt})
+
+    # ── Database Query ──
+    db_patterns = [
+        (r'query (?:database |db )?(.+?):\s*(.+)', 1, 2),
+        (r'sql (.+?):\s*(.+)', 1, 2),
+    ]
+    for pattern, path_group, query_group in db_patterns:
+        m = re.search(pattern, msg)
+        if m and 'query_database' in _tools and _tools['query_database'].enabled:
+            return ('query_database', {'db_path': m.group(path_group).strip(), 'query': m.group(query_group).strip()})
+
     return None
 
 
@@ -1308,4 +1331,169 @@ def tool_translate(args: Dict) -> str:
         )
     except Exception as e:
         return f"Translation error: {str(e)}"
+
+
+# ── Final Tools: Image Gen + Database ─────────────────────────────────────────
+
+IMAGES_DIR = Path.home() / "birdsnest_workspace" / "images"
+
+@register_tool(
+    "generate_image",
+    "Generate an image from a text prompt using local AI (MLX Flux)",
+    {
+        "type": "object",
+        "properties": {
+            "prompt": {"type": "string", "description": "Text description of the image to generate"},
+            "steps": {"type": "integer", "description": "Number of inference steps (default 4, more=better quality)"},
+            "width": {"type": "integer", "description": "Image width (default 512)"},
+            "height": {"type": "integer", "description": "Image height (default 512)"},
+        },
+        "required": ["prompt"],
+    },
+)
+def tool_generate_image(args: Dict) -> str:
+    prompt = args.get("prompt", "")
+    if not prompt:
+        return "Error: prompt is required"
+
+    steps = args.get("steps", 4)
+    width = args.get("width", 512)
+    height = args.get("height", 512)
+
+    # Ensure output directory
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    # Sanitize prompt for filename
+    safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', prompt[:40]).strip('_').lower()
+    filename = f"{safe_name}_{timestamp}.png"
+    filepath = IMAGES_DIR / filename
+
+    # Check if mflux is available
+    try:
+        check = subprocess.run(
+            ["mflux-generate", "--help"],
+            capture_output=True, text=True, timeout=5
+        )
+        if check.returncode != 0:
+            raise FileNotFoundError
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return (
+            "mflux not installed or not found.\n"
+            "Install with: pip install mflux\n"
+            "First run will download the Flux model (~12GB)."
+        )
+
+    # Build the mflux command
+    cmd = [
+        "mflux-generate",
+        "--prompt", prompt,
+        "--output", str(filepath),
+        "--steps", str(steps),
+        "--width", str(width),
+        "--height", str(height),
+        "--model", "schnell",  # Fast model (4 steps)
+    ]
+
+    try:
+        t0 = time.time()
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 min max
+        )
+        elapsed = time.time() - t0
+
+        if filepath.exists():
+            size_kb = filepath.stat().st_size / 1024
+            # Return the serve URL for the frontend
+            serve_url = f"/workspace/images/{filename}"
+            return (
+                f"Image generated in {elapsed:.1f}s\n"
+                f"Prompt: {prompt}\n"
+                f"Size: {width}x{height}, {size_kb:.1f} KB\n"
+                f"Steps: {steps}\n"
+                f"File: {filepath}\n"
+                f"URL: {serve_url}"
+            )
+        else:
+            stderr = result.stderr[-500:] if result.stderr else "No error output"
+            return f"Image generation failed.\nError: {stderr}"
+
+    except subprocess.TimeoutExpired:
+        return "Image generation timed out (5 min limit)"
+    except Exception as e:
+        return f"Image generation error: {str(e)}"
+
+
+@register_tool(
+    "query_database",
+    "Query a local SQLite database with SQL",
+    {
+        "type": "object",
+        "properties": {
+            "db_path": {"type": "string", "description": "Path to the SQLite database file"},
+            "query": {"type": "string", "description": "SQL query to execute"},
+        },
+        "required": ["db_path", "query"],
+    },
+)
+def tool_query_database(args: Dict) -> str:
+    import sqlite3
+
+    db_path = args.get("db_path", "")
+    query = args.get("query", "")
+
+    if not db_path or not query:
+        return "Error: db_path and query are required"
+
+    # Expand home directory
+    db_path = str(Path(db_path).expanduser())
+
+    # Check file exists
+    if not Path(db_path).exists():
+        return f"Database not found: {db_path}"
+
+    if not Path(db_path).is_file():
+        return f"Not a file: {db_path}"
+
+    # Safety: block destructive SQL
+    dangerous = ['drop ', 'delete ', 'alter ', 'truncate ', 'update ', 'insert ', 'create ', 'attach ']
+    query_lower = query.lower().strip()
+    if any(query_lower.startswith(d) for d in dangerous):
+        return f"Blocked: destructive SQL not allowed (query starts with '{query_lower.split()[0]}'). Read-only queries only."
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(query)
+        rows = cursor.fetchmany(100)  # Max 100 rows
+
+        if not rows:
+            conn.close()
+            return "Query returned no results."
+
+        # Format as table
+        columns = rows[0].keys()
+        lines = [" | ".join(columns)]
+        lines.append("-" * len(lines[0]))
+
+        for row in rows:
+            lines.append(" | ".join(str(row[c]) if row[c] is not None else "NULL" for c in columns))
+
+        total = cursor.rowcount if cursor.rowcount >= 0 else len(rows)
+        result = "\n".join(lines)
+        if len(rows) == 100:
+            result += "\n\n[...showing first 100 rows]"
+
+        conn.close()
+        return f"Query: {query}\nResults ({len(rows)} rows):\n\n{result}"
+
+    except sqlite3.Error as e:
+        return f"SQL error: {str(e)}"
+    except Exception as e:
+        return f"Database error: {str(e)}"
+
 
