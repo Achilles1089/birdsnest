@@ -146,11 +146,17 @@
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
 
-            <!-- Image Gen + Database — now active -->
+            <!-- Image Gen + Music Gen + Database — active -->
             <button class="tool-card" data-tool="input" data-prefix="generate an image of "
                 data-placeholder="a sunset over mountains" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎨</span><span class="tool-name">Image Gen</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="a sunset..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="generate music of "
+                data-placeholder="epic orchestral battle" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🎵</span><span class="tool-name">Music Gen</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="lofi chill..."
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="query database "
@@ -232,14 +238,24 @@
         <!-- Music Models Tab -->
         <div class="tab-content" id="tabMusic">
             <div class="panel-section">
-                <div class="empty-state">🎵 Coming soon — MusicGen models</div>
+                <h3>Active Model</h3>
+                <div id="activeMusicModel" class="empty-state">MusicGen Small (default)</div>
+            </div>
+            <div class="panel-section">
+                <h3>Available</h3>
+                <div id="musicModelsList" class="model-list"></div>
             </div>
         </div>
 
         <!-- Embeddings Tab -->
         <div class="tab-content" id="tabEmbed">
             <div class="panel-section">
-                <div class="empty-state">📎 Coming soon — Embedding models for RAG</div>
+                <h3>Active Model</h3>
+                <div id="activeEmbedModel" class="empty-state">Default (TF-IDF)</div>
+            </div>
+            <div class="panel-section">
+                <h3>Available</h3>
+                <div id="embedModelsList" class="model-list"></div>
             </div>
         </div>
 

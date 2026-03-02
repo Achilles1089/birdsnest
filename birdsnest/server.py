@@ -148,6 +148,19 @@ async def select_image_model(request: Request):
     return {"success": True, "model": active_image_model}
 
 
+# ── REST API: Music Models ───────────────────────────────────────────────────
+
+@app.post("/api/music-models/select")
+async def select_music_model(request: Request):
+    data = await request.json()
+    model_size = data.get("model", "small")
+    from pathlib import Path
+    config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_music_model"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(model_size)
+    return {"success": True, "model": model_size}
+
+
 # ── REST API: Translation Models ─────────────────────────────────────────────
 
 @app.get("/api/translation-models")

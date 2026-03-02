@@ -110,6 +110,7 @@ function connectWebSocket() {
                     // Live timer for slow tools
                     const slowToolMessages = {
                         'generate_image': '🎨 Generating image',
+                        'generate_music': '🎵 Generating music',
                         'screenshot': '📸 Taking screenshot',
                         'translate': '🌐 Translating',
                         'youtube_transcript': '📺 Fetching transcript',
@@ -153,10 +154,20 @@ function connectWebSocket() {
                     resultEl.className = 'tool-result';
 
                     // Check if result contains an image URL
-                    const imgMatch = data.result && data.result.match(/URL:\s*(\/workspace\/\S+)/);
-                    let imageHtml = '';
+                    const imgMatch = data.result && data.result.match(/URL:\s*(\/workspace\/\S+\.(?:png|jpg|jpeg|webp))/i);
+                    let mediaHtml = '';
                     if (imgMatch) {
-                        imageHtml = `<img src="${imgMatch[1]}" alt="Generated image" style="max-width:100%;border-radius:8px;margin-top:8px;">`;
+                        mediaHtml = `<img src="${imgMatch[1]}" alt="Generated image" style="max-width:100%;border-radius:8px;margin-top:8px;">`;
+                    }
+
+                    // Check if result contains an audio URL
+                    const audioMatch = data.result && data.result.match(/Audio URL:\s*(\/workspace\/\S+\.wav)/i);
+                    if (audioMatch) {
+                        mediaHtml = `<div class="audio-player" style="margin-top:8px">
+                            <audio controls preload="auto" style="width:100%;border-radius:8px;">
+                                <source src="${audioMatch[1]}" type="audio/wav">
+                            </audio>
+                        </div>`;
                     }
 
                     // Linkify URLs in the result text
@@ -165,7 +176,7 @@ function connectWebSocket() {
                         '<a href="$1" target="_blank" rel="noopener" class="result-link">$1</a>'
                     );
 
-                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${linkified}</pre>${imageHtml}`;
+                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${linkified}</pre>${mediaHtml}`;
                     textEl.appendChild(resultEl);
                     textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                     scrollToBottom();
@@ -576,6 +587,8 @@ function toggleModelPanel() {
         loadModels();
         loadImageModels();
         loadTranslationModels();
+        loadMusicModels();
+        loadEmbeddingModels();
     }
 }
 
@@ -736,6 +749,112 @@ async function downloadTranslationModel(pair, btn) {
     } catch {
         btn.textContent = 'Error';
     }
+}
+
+// ── Music Models (MusicGen) ──────────────────────────
+const MUSIC_MODEL_CATALOG = [
+    { id: 'small', name: 'MusicGen Small', size: '500 MB', quality: '⭐⭐⭐', desc: 'Fast, good for prototyping' },
+    { id: 'medium', name: 'MusicGen Medium', size: '1.5 GB', quality: '⭐⭐⭐⭐', desc: 'Better quality, balanced speed' },
+    { id: 'large', name: 'MusicGen Large', size: '3.3 GB', quality: '⭐⭐⭐⭐⭐', desc: 'Best quality, slower' },
+];
+
+let activeMusicModel = localStorage.getItem('birdsnest_music_model') || 'small';
+
+function loadMusicModels() {
+    const active = MUSIC_MODEL_CATALOG.find(m => m.id === activeMusicModel) || MUSIC_MODEL_CATALOG[0];
+    document.getElementById('activeMusicModel').innerHTML = `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${active.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${active.quality}</span>
+                    <span class="badge badge-size">${active.size}</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${active.desc}</div>
+        </div>
+    `;
+    document.getElementById('activeMusicModel').className = '';
+
+    const list = document.getElementById('musicModelsList');
+    const others = MUSIC_MODEL_CATALOG.filter(m => m.id !== activeMusicModel);
+    list.innerHTML = others.map(m => `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${m.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${m.quality}</span>
+                    <span class="badge badge-size">${m.size}</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${m.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-primary" onclick="selectMusicModel('${m.id}')">Select</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function selectMusicModel(id) {
+    activeMusicModel = id;
+    localStorage.setItem('birdsnest_music_model', id);
+    await fetch('/api/music-models/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: id }),
+    }).catch(() => { });
+    loadMusicModels();
+}
+
+// ── Embedding Models (RAG) ───────────────────────────
+const EMBED_MODEL_CATALOG = [
+    { id: 'tfidf', name: 'TF-IDF (Built-in)', size: '0 MB', quality: '⭐⭐', desc: 'Fast keyword matching, no download' },
+    { id: 'all-MiniLM-L6-v2', name: 'MiniLM-L6', size: '80 MB', quality: '⭐⭐⭐⭐', desc: 'Best balance of speed & quality' },
+    { id: 'nomic-embed-text-v1.5', name: 'Nomic Embed', size: '275 MB', quality: '⭐⭐⭐⭐⭐', desc: 'Top-tier semantic search' },
+    { id: 'BAAI/bge-small-en-v1.5', name: 'BGE Small', size: '130 MB', quality: '⭐⭐⭐⭐', desc: 'High quality, small footprint' },
+];
+
+let activeEmbedModel = localStorage.getItem('birdsnest_embed_model') || 'tfidf';
+
+function loadEmbeddingModels() {
+    const active = EMBED_MODEL_CATALOG.find(m => m.id === activeEmbedModel) || EMBED_MODEL_CATALOG[0];
+    document.getElementById('activeEmbedModel').innerHTML = `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${active.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${active.quality}</span>
+                    <span class="badge badge-size">${active.size}</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${active.desc}</div>
+        </div>
+    `;
+    document.getElementById('activeEmbedModel').className = '';
+
+    const list = document.getElementById('embedModelsList');
+    const others = EMBED_MODEL_CATALOG.filter(m => m.id !== activeEmbedModel);
+    list.innerHTML = others.map(m => `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${m.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${m.quality}</span>
+                    <span class="badge badge-size">${m.size}</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${m.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-primary" onclick="selectEmbedModel('${m.id}')">Select</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function selectEmbedModel(id) {
+    activeEmbedModel = id;
+    localStorage.setItem('birdsnest_embed_model', id);
+    loadEmbeddingModels();
 }
 
 // ── System Monitor ──────────────────────────────────

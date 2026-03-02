@@ -419,6 +419,19 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
         if m and 'query_database' in _tools and _tools['query_database'].enabled:
             return ('query_database', {'db_path': m.group(path_group).strip(), 'query': m.group(query_group).strip()})
 
+    # ── Music Generation ──
+    music_patterns = [
+        (r'(?:generate|create|make|compose|produce) (?:a |some )?(?:music|song|beat|melody|track|tune) (?:of |about |with |like |that sounds like )?(.+)', 1),
+        (r'(?:generate|create|make|compose|produce) (?:a |some )?(.+?)(?:music|song|beat|melody|track|tune)', 1),
+        (r'play (?:me )?(?:a |some )?(.+?)(?:music|song|beat)', 1),
+    ]
+    for pattern, group in music_patterns:
+        m = re.search(pattern, msg)
+        if m and 'generate_music' in _tools and _tools['generate_music'].enabled:
+            prompt = m.group(group).strip().rstrip('.')
+            if prompt and len(prompt) > 3:
+                return ('generate_music', {'prompt': prompt})
+
     return None
 
 
@@ -1525,3 +1538,87 @@ def tool_query_database(args: Dict) -> str:
         return f"Database error: {str(e)}"
 
 
+# ── Music Generation (MusicGen) ──────────────────────────────────────────────
+
+@register_tool(
+    "generate_music",
+    "Generate music from a text description using MusicGen",
+    {
+        "type": "object",
+        "properties": {
+            "prompt": {"type": "string", "description": "Description of the music to generate"},
+            "duration": {"type": "number", "description": "Duration in seconds (default 8, max 30)"},
+        },
+        "required": ["prompt"],
+    },
+)
+def tool_generate_music(args: Dict) -> str:
+    prompt = args.get("prompt", "")
+    duration = min(args.get("duration", 8), 30)
+
+    if not prompt:
+        return "Error: No music prompt provided"
+
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"music_{timestamp}.wav"
+    filepath = WORKSPACE_DIR / filename
+
+    # Read selected model size
+    model_config = WORKSPACE_DIR / ".birdsnest_music_model"
+    model_size = "small"
+    if model_config.exists():
+        model_size = model_config.read_text().strip() or "small"
+
+    model_name = f"facebook/musicgen-{model_size}"
+
+    try:
+        import torch
+        from transformers import AutoProcessor, MusicgenForConditionalGeneration
+        import scipy.io.wavfile
+
+        t0 = time.time()
+
+        # Load model on MPS (Apple Silicon) or CPU
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        processor = AutoProcessor.from_pretrained(model_name)
+        model = MusicgenForConditionalGeneration.from_pretrained(model_name).to(device)
+
+        # Set generation length (256 tokens ≈ 5s at 32kHz)
+        tokens_per_second = 50  # approximate
+        max_tokens = int(duration * tokens_per_second)
+
+        inputs = processor(
+            text=[prompt],
+            padding=True,
+            return_tensors="pt",
+        ).to(device)
+
+        audio_values = model.generate(**inputs, max_new_tokens=max_tokens)
+        audio_data = audio_values[0, 0].cpu().numpy()
+
+        # Save as WAV
+        sample_rate = model.config.audio_encoder.sampling_rate
+        scipy.io.wavfile.write(str(filepath), rate=sample_rate, data=audio_data)
+
+        elapsed = time.time() - t0
+        size_kb = filepath.stat().st_size / 1024
+
+        return (
+            f"🎵 Music generated!\n"
+            f"Prompt: {prompt}\n"
+            f"Model: {model_name}\n"
+            f"Duration: ~{duration}s\n"
+            f"Size: {size_kb:.0f} KB\n"
+            f"Time: {elapsed:.1f}s\n"
+            f"Audio URL: /workspace/{filename}"
+        )
+
+    except ImportError:
+        return (
+            "MusicGen dependencies not installed.\n"
+            "Install with: pip install transformers torch scipy\n"
+            "First run will download the MusicGen model (~500MB for small)."
+        )
+    except Exception as e:
+        return f"Music generation error: {str(e)}"
