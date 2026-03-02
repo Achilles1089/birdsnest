@@ -138,7 +138,7 @@ function connectWebSocket() {
                 }
                 break;
 
-            case 'tool_result':
+            case 'tool_result': {
                 // Clear any running timer
                 if (window._toolTimer) { clearInterval(window._toolTimer); window._toolTimer = null; }
                 const progressEl = document.getElementById('toolProgressTimer');
@@ -159,13 +159,20 @@ function connectWebSocket() {
                         imageHtml = `<img src="${imgMatch[1]}" alt="Generated image" style="max-width:100%;border-radius:8px;margin-top:8px;">`;
                     }
 
-                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${data.result}</pre>${imageHtml}`;
+                    // Linkify URLs in the result text
+                    const linkified = (data.result || '').replace(
+                        /(https?:\/\/[^\s<]+)/g,
+                        '<a href="$1" target="_blank" rel="noopener" class="result-link">$1</a>'
+                    );
+
+                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${linkified}</pre>${imageHtml}`;
                     textEl.appendChild(resultEl);
-                    textEl.innerHTML += '<span class="typing-indicator"></span>';
+                    textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                     scrollToBottom();
                     setStatus('Generating...', 'yellow');
                 }
                 break;
+            }
 
             case 'error':
                 isGenerating = false;

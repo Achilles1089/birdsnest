@@ -530,31 +530,48 @@ def tool_search_web(args: Dict) -> str:
     from html.parser import HTMLParser
 
     class DDGParser(HTMLParser):
-        """Minimal parser to extract search result snippets from DuckDuckGo HTML."""
+        """Parse DuckDuckGo HTML results — captures title, URL, and snippet."""
         def __init__(self):
             super().__init__()
-            self.results = []
-            self._in_result = False
-            self._current = ""
-            self._depth = 0
+            self.results = []  # list of {title, url, snippet}
+            self._current = {}
+            self._capture = None  # 'title' | 'snippet' | None
+            self._text = ""
 
         def handle_starttag(self, tag, attrs):
             attrs_dict = dict(attrs)
             cls = attrs_dict.get("class", "")
-            if "result__snippet" in cls or "result__title" in cls:
-                self._in_result = True
-                self._current = ""
+
+            # Result title link — has both title text and href
+            if tag == "a" and "result__a" in cls:
+                href = attrs_dict.get("href", "")
+                # DuckDuckGo wraps URLs in redirect — extract actual URL
+                if "uddg=" in href:
+                    import urllib.parse as up
+                    parsed = up.parse_qs(up.urlparse(href).query)
+                    href = parsed.get("uddg", [href])[0]
+                self._current = {"title": "", "url": href, "snippet": ""}
+                self._capture = "title"
+                self._text = ""
+
+            elif "result__snippet" in cls:
+                self._capture = "snippet"
+                self._text = ""
 
         def handle_endtag(self, tag):
-            if self._in_result:
-                text = self._current.strip()
-                if text and len(text) > 10:
-                    self.results.append(text)
-                self._in_result = False
+            if self._capture == "title" and tag == "a":
+                self._current["title"] = self._text.strip()
+                self._capture = None
+            elif self._capture == "snippet":
+                self._current["snippet"] = self._text.strip()
+                if self._current.get("title"):
+                    self.results.append(self._current.copy())
+                self._current = {}
+                self._capture = None
 
         def handle_data(self, data):
-            if self._in_result:
-                self._current += data
+            if self._capture:
+                self._text += data
 
     try:
         url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
@@ -570,19 +587,23 @@ def tool_search_web(args: Dict) -> str:
         if not parser.results:
             return f"No results found for: {query}"
 
-        # Deduplicate and limit
+        # Deduplicate by URL and limit to 5
         seen = set()
         unique = []
         for r in parser.results:
-            if r not in seen:
-                seen.add(r)
+            if r["url"] not in seen:
+                seen.add(r["url"])
                 unique.append(r)
             if len(unique) >= 5:
                 break
 
         output = f"Search results for: {query}\n\n"
         for i, r in enumerate(unique, 1):
-            output += f"{i}. {r}\n"
+            output += f"{i}. {r['title']}\n"
+            output += f"   {r['url']}\n"
+            if r['snippet']:
+                output += f"   {r['snippet'][:120]}\n"
+            output += "\n"
         return output
 
     except Exception as e:

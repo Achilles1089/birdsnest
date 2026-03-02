@@ -960,6 +960,18 @@ main {
     overflow-y: auto;
 }
 
+.tool-result-output .result-link {
+    color: #8b9cf7;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.tool-result-output .result-link:hover {
+    color: #a8b4ff;
+    text-decoration: underline;
+}
+
 /* Tool progress indicator */
 .tool-progress {
     display: flex;
