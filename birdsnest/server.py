@@ -203,6 +203,29 @@ async def download_translation_model(request: Request):
         return {"success": False, "error": str(e)}
 
 
+@app.delete("/api/translation-models/{pair}")
+async def delete_translation_model(pair: str):
+    """Delete a cached Opus-MT translation model from disk."""
+    import pathlib
+    import shutil
+    cache_dir = pathlib.Path.home() / ".cache" / "huggingface" / "hub"
+    # HF cache uses -- as separator (e.g., models--Helsinki-NLP--opus-mt-en-es)
+    hf_pair = pair.replace("-", "--", 1) if pair.count("-") == 1 else pair
+    model_dir = cache_dir / f"models--Helsinki-NLP--opus-mt-{hf_pair}"
+    
+    if not model_dir.exists():
+        # Try with the pair as-is
+        model_dir = cache_dir / f"models--Helsinki-NLP--opus-mt-{pair}"
+    
+    if model_dir.exists():
+        size_bytes = sum(f.stat().st_size for f in model_dir.rglob("*") if f.is_file())
+        freed_gb = round(size_bytes / 1024**3, 2)
+        shutil.rmtree(model_dir)
+        return {"success": True, "pair": pair, "freed_gb": freed_gb}
+    
+    return {"success": False, "error": f"Model for {pair} not found in cache"}
+
+
 # ── REST API: Models ────────────────────────────────────────────────────────
 
 @app.get("/api/models")
@@ -281,11 +304,11 @@ async def download_model(req: DownloadModelRequest):
 
 @app.delete("/api/models/{model_name}")
 async def delete_model(model_name: str):
-    """Delete a model from disk."""
+    """Delete a model from disk. Auto-unloads if currently active."""
     global active_engine
-    # Don't delete loaded model
+    # Auto-unload if this model is currently loaded
     if active_engine and active_engine.is_loaded and active_engine.model_name == model_name:
-        raise HTTPException(400, "Cannot delete currently loaded model. Unload first.")
+        active_engine.unload()
     
     result = model_manager.delete(model_name)
     if "error" in result:

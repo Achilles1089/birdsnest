@@ -707,6 +707,9 @@ async function loadTranslationModels() {
                         <span class="model-card-name">${m.flag} ${m.from} → ${m.to}</span>
                         <span class="badge badge-size" style="color:#4ade80">Installed</span>
                     </div>
+                    <div class="model-card-actions">
+                        <button class="btn btn-danger" onclick="deleteTranslationModel('${m.pair}', '${m.from} → ${m.to}')">Delete</button>
+                    </div>
                 </div>
             `).join('')
             : '<div class="empty-state">No translation pairs installed yet</div>';
@@ -748,6 +751,22 @@ async function downloadTranslationModel(pair, btn) {
         }
     } catch {
         btn.textContent = 'Error';
+    }
+}
+
+async function deleteTranslationModel(pair, displayName) {
+    if (!confirm(`Delete translation model: ${displayName}?\nThis will free disk space.`)) return;
+    try {
+        const res = await fetch(`/api/translation-models/${encodeURIComponent(pair)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            addSystemMessage(`Deleted ${displayName} — freed ${data.freed_gb} GB`);
+            loadTranslationModels();
+        } else {
+            addSystemMessage(data.error || 'Delete failed', 'error');
+        }
+    } catch (e) {
+        addSystemMessage(`Delete failed: ${e.message}`, 'error');
     }
 }
 
