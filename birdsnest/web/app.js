@@ -68,10 +68,20 @@ function connectWebSocket() {
                     const textEl = currentStreamEl.querySelector('.message-text');
                     const cursor = textEl.querySelector('.typing-indicator');
                     if (cursor) cursor.remove();
-                    // Save assistant message to history
-                    const finalText = textEl.textContent;
-                    chatHistory.push({ role: 'assistant', text: finalText, nickname: currentNickname, stats: data.stats });
+
+                    // Detect if this was a tool-only response (has tool elements, no streamed text)
+                    const hasToolResult = textEl.querySelector('.tool-result') !== null;
+                    const finalText = textEl.textContent.trim();
+
+                    if (hasToolResult) {
+                        // Tool-only response — save with flag so restoreHistory skips it
+                        chatHistory.push({ role: 'assistant', text: '', nickname: currentNickname, isTool: true });
+                    } else {
+                        // Regular model response — save the text
+                        chatHistory.push({ role: 'assistant', text: finalText, nickname: currentNickname, stats: data.stats });
+                    }
                     saveHistory();
+
                     if (data.stats) {
                         const statsEl = document.createElement('div');
                         statsEl.className = 'message-stats';
@@ -526,11 +536,15 @@ function restoreHistory() {
         if (welcome) welcome.remove();
 
         chatHistory.forEach(entry => {
+            // Skip tool-only responses — they were one-shot results
+            if (entry.isTool) return;
+
             if (entry.role === 'user') {
                 currentNickname = 'Bird\'s Nest'; // temporarily
                 addMessage('user', entry.text);
             } else {
                 currentNickname = entry.nickname || 'Bird\'s Nest';
+                if (!entry.text) return; // skip empty entries
                 const el = addMessage('assistant', entry.text);
                 if (entry.stats && el) {
                     const statsEl = document.createElement('div');
