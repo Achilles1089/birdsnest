@@ -51,6 +51,8 @@ function connectWebSocket() {
                 currentStreamEl = addMessage('assistant', '', true);
                 window._thinkState = { active: false, buffer: '' }; // Reset for new message
                 setStatus(`Generating...`, 'yellow');
+                document.getElementById('sendBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = '';
                 break;
 
             case 'token':
@@ -176,6 +178,41 @@ function connectWebSocket() {
                 }
                 currentStreamEl = null;
                 setStatus('Ready', 'green');
+                document.getElementById('sendBtn').style.display = '';
+                document.getElementById('stopBtn').style.display = 'none';
+                document.getElementById('chatInput').focus();
+                break;
+
+            case 'cancelled':
+                isGenerating = false;
+                if (currentStreamEl) {
+                    const textEl = currentStreamEl.querySelector('.message-text');
+                    const cursor = textEl.querySelector('.typing-indicator');
+                    if (cursor) cursor.remove();
+
+                    // Add stopped indicator
+                    const stoppedEl = document.createElement('div');
+                    stoppedEl.className = 'message-stats';
+                    stoppedEl.style.color = 'var(--text-muted)';
+                    if (data.stats && data.stats.tokens > 0) {
+                        stoppedEl.textContent = `⏹ Stopped — ${data.stats.tokens} tokens • ${data.stats.tok_s} tok/s • ${data.stats.time}s`;
+                        document.getElementById('tokStats').textContent = `${data.stats.tok_s} tok/s`;
+                    } else {
+                        stoppedEl.textContent = `⏹ Stopped`;
+                    }
+                    currentStreamEl.querySelector('.message-content').appendChild(stoppedEl);
+
+                    // Save partial response
+                    const partialText = textEl.textContent.trim();
+                    if (partialText && partialText.length > 1) {
+                        chatHistory.push({ role: 'assistant', text: partialText, nickname: currentNickname, stopped: true });
+                        saveHistory();
+                    }
+                }
+                currentStreamEl = null;
+                setStatus('Ready', 'green');
+                document.getElementById('sendBtn').style.display = '';
+                document.getElementById('stopBtn').style.display = 'none';
                 document.getElementById('chatInput').focus();
                 break;
 
@@ -377,6 +414,12 @@ function sendMessage() {
 
 function handleKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function stopGeneration() {
+    if (!isGenerating || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'cancel' }));
+    setStatus('Stopping...', 'yellow');
 }
 
 function autoResize(el) {

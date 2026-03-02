@@ -553,11 +553,18 @@ async def tools_toggle(body: dict):
 async def websocket_chat(websocket: WebSocket):
     """Streaming chat via WebSocket with tool call detection."""
     await websocket.accept()
+    cancel_flag = {"cancelled": False}  # Mutable dict so inner functions can set it
 
     try:
         while True:
+            cancel_flag["cancelled"] = False  # Reset for each message
             data = await websocket.receive_text()
             msg = json.loads(data)
+
+            # Handle cancel messages
+            if msg.get("type") == "cancel":
+                cancel_flag["cancelled"] = True
+                continue
 
             prompt = msg.get("message", "")
             temperature = msg.get("temperature", 1.0)
@@ -650,7 +657,26 @@ async def websocket_chat(websocket: WebSocket):
             t0 = time.time()
             token_count = 0
 
+            # ── Cancel listener: runs concurrently to check for stop requests ──
+            async def cancel_listener():
+                """Listen for cancel messages while generation is running."""
+                try:
+                    while not cancel_flag["cancelled"]:
+                        data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                        inner_msg = json.loads(data)
+                        if inner_msg.get("type") == "cancel":
+                            cancel_flag["cancelled"] = True
+                            return
+                except asyncio.TimeoutError:
+                    pass
+                except Exception:
+                    pass
+
+            # Start cancel listener as background task
+            listener_task = asyncio.create_task(cancel_listener())
+
             # Stream tokens — model-based tool detection as fallback
+            was_cancelled = False
             try:
                 if use_tools and get_enabled_tools():
                     # ── Buffered mode: detect tool calls in model output ──
@@ -661,6 +687,9 @@ async def websocket_chat(websocket: WebSocket):
                     for piece in active_engine.generate_stream(
                         user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens
                     ):
+                        if cancel_flag["cancelled"]:
+                            was_cancelled = True
+                            break
                         token_count += 1
 
                         # Already confirmed this is normal text — send immediately, skip buffering
@@ -710,7 +739,7 @@ async def websocket_chat(websocket: WebSocket):
                         await asyncio.sleep(0)
 
                     # Flush any remaining buffer
-                    if buffer and not tool_mode_confirmed:
+                    if buffer and not tool_mode_confirmed and not was_cancelled:
                         await websocket.send_json({"type": "token", "content": buffer})
 
                 else:
@@ -718,24 +747,43 @@ async def websocket_chat(websocket: WebSocket):
                     for piece in active_engine.generate_stream(
                         user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens
                     ):
+                        if cancel_flag["cancelled"]:
+                            was_cancelled = True
+                            break
                         token_count += 1
                         await websocket.send_json({"type": "token", "content": piece})
                         await asyncio.sleep(0)
 
             except Exception as e:
                 await websocket.send_json({"type": "error", "content": str(e)})
+            finally:
+                listener_task.cancel()
+                try:
+                    await listener_task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
             elapsed = time.time() - t0
             tok_s = token_count / elapsed if elapsed > 0 else 0
 
-            await websocket.send_json({
-                "type": "done",
-                "stats": {
-                    "tokens": token_count,
-                    "time": round(elapsed, 2),
-                    "tok_s": round(tok_s, 1),
-                }
-            })
+            if was_cancelled:
+                await websocket.send_json({
+                    "type": "cancelled",
+                    "stats": {
+                        "tokens": token_count,
+                        "time": round(elapsed, 2),
+                        "tok_s": round(tok_s, 1),
+                    }
+                })
+            else:
+                await websocket.send_json({
+                    "type": "done",
+                    "stats": {
+                        "tokens": token_count,
+                        "time": round(elapsed, 2),
+                        "tok_s": round(tok_s, 1),
+                    }
+                })
 
     except WebSocketDisconnect:
         pass
