@@ -96,13 +96,44 @@ function connectWebSocket() {
                     const argsStr = Object.entries(data.args || {}).map(([k, v]) => `${k}="${v}"`).join(', ');
                     toolCallEl.innerHTML = `<span class="tool-call-icon">🔧</span> <span class="tool-call-name">${data.name}</span>${argsStr ? `<span class="tool-call-args">(${argsStr})</span>` : ''}`;
                     textEl.appendChild(toolCallEl);
+
+                    // Live timer for slow tools
+                    const slowToolMessages = {
+                        'generate_image': '🎨 Generating image',
+                        'screenshot': '📸 Taking screenshot',
+                        'translate': '🌐 Translating',
+                        'youtube_transcript': '📺 Fetching transcript',
+                        'search_web': '🔍 Searching',
+                        'fetch_url': '🌍 Fetching URL',
+                        'weather': '🌤️ Getting weather',
+                    };
+                    const slowMsg = slowToolMessages[data.name];
+                    if (slowMsg) {
+                        const timerEl = document.createElement('div');
+                        timerEl.className = 'tool-progress';
+                        timerEl.id = 'toolProgressTimer';
+                        timerEl.innerHTML = `<span class="tool-progress-spinner"></span> ${slowMsg}... <span class="tool-progress-time">0s</span>`;
+                        textEl.appendChild(timerEl);
+                        let secs = 0;
+                        window._toolTimer = setInterval(() => {
+                            secs++;
+                            const timeEl = document.getElementById('toolProgressTimer')?.querySelector('.tool-progress-time');
+                            if (timeEl) timeEl.textContent = `${secs}s`;
+                        }, 1000);
+                    }
+
                     textEl.innerHTML += '<span class="typing-indicator"></span>';
                     scrollToBottom();
-                    setStatus('Executing tool...', 'yellow');
+                    setStatus(slowMsg ? `${slowMsg}...` : 'Executing tool...', 'yellow');
                 }
                 break;
 
             case 'tool_result':
+                // Clear any running timer
+                if (window._toolTimer) { clearInterval(window._toolTimer); window._toolTimer = null; }
+                const progressEl = document.getElementById('toolProgressTimer');
+                if (progressEl) progressEl.remove();
+
                 if (currentStreamEl) {
                     const textEl = currentStreamEl.querySelector('.message-text');
                     const cursor = textEl.querySelector('.typing-indicator');
