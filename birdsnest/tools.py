@@ -1106,30 +1106,73 @@ def tool_weather(args: Dict) -> str:
     if not location:
         return "Error: No location provided"
 
-    # wttr.in JSON endpoint — free, no API key, no encoding issues
+    # Open-Meteo — free, no API key, sub-1s responses
     try:
         import urllib.request
         import urllib.parse
         import json as _json
-        loc = urllib.parse.quote(location)
-        url = f"https://wttr.in/{loc}?format=j1"
-        req = urllib.request.Request(url, headers={"User-Agent": "curl/7.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = _json.loads(resp.read().decode("utf-8"))
 
-        cur = data["current_condition"][0]
-        area = data["nearest_area"][0]
-        city = area["areaName"][0]["value"]
-        region = area["region"][0]["value"]
+        # Step 1: Geocode the location name to lat/lon
+        def _geocode(q):
+            geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(q)}&count=1"
+            req = urllib.request.Request(geo_url, headers={"User-Agent": "BirdsNest/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return _json.loads(resp.read().decode("utf-8"))
 
+        geo = _geocode(location)
+        # Retry with just the city name if "city state" format fails
+        if ("results" not in geo or len(geo["results"]) == 0):
+            # Try stripping state/country suffixes: "manassas va" → "manassas"
+            parts = [p.strip() for p in location.replace(",", " ").split() if p.strip()]
+            if len(parts) > 1:
+                geo = _geocode(parts[0])
+
+        if "results" not in geo or len(geo["results"]) == 0:
+            return f"Could not find location: {location}"
+
+        place = geo["results"][0]
+        lat, lon = place["latitude"], place["longitude"]
+        city = place.get("name", location)
+        admin = place.get("admin1", "")
+        country = place.get("country", "")
+
+        # Step 2: Get current weather
+        wx_url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat}&longitude={lon}"
+            f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
+            f"weather_code,wind_speed_10m,wind_direction_10m"
+            f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
+        )
+        req2 = urllib.request.Request(wx_url, headers={"User-Agent": "BirdsNest/1.0"})
+        with urllib.request.urlopen(req2, timeout=10) as resp2:
+            wx = _json.loads(resp2.read().decode("utf-8"))
+
+        cur = wx["current"]
+        # WMO weather codes to descriptions
+        wmo = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle",
+            55: "Heavy drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain",
+            71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+            80: "Light showers", 81: "Showers", 82: "Heavy showers",
+            85: "Light snow showers", 86: "Heavy snow showers",
+            95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Severe thunderstorm",
+        }
+        desc = wmo.get(cur.get("weather_code", -1), "Unknown")
+        wind_deg = cur.get("wind_direction_10m", 0)
+        dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        wind_dir = dirs[int((wind_deg + 11.25) / 22.5) % 16]
+
+        loc_str = f"{city}, {admin}" if admin else f"{city}, {country}"
         return (
-            f"Weather for {city}, {region}\n\n"
-            f"Temperature: {cur['temp_F']}F / {cur['temp_C']}C "
-            f"(feels like {cur['FeelsLikeF']}F / {cur['FeelsLikeC']}C)\n"
-            f"Conditions: {cur['weatherDesc'][0]['value']}\n"
-            f"Humidity: {cur['humidity']}%\n"
-            f"Wind: {cur['windspeedMiles']} mph {cur['winddir16Point']}\n"
-            f"UV Index: {cur['uvIndex']}"
+            f"Weather for {loc_str}\n\n"
+            f"Temperature: {cur['temperature_2m']}F "
+            f"(feels like {cur['apparent_temperature']}F)\n"
+            f"Conditions: {desc}\n"
+            f"Humidity: {cur['relative_humidity_2m']}%\n"
+            f"Wind: {cur['wind_speed_10m']} mph {wind_dir}"
         )
 
     except Exception as e:
