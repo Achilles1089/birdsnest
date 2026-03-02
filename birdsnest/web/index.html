@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bird's Nest — Local AI Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=3">
+</head>
+
+<body>
+    <!-- ── Header ──────────────────────────────────────────── -->
+    <header id="header">
+        <div class="header-left">
+            <span class="logo">🪹</span>
+            <h1>Bird's Nest</h1>
+            <span class="subtitle">Non-Transformer AI</span>
+        </div>
+        <div class="header-center">
+            <div class="model-badge" id="modelBadge" onclick="toggleModelPanel()">
+                <span class="model-dot" id="modelDot"></span>
+                <span id="modelLabel">No model loaded</span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M3 5l3 3 3-3" />
+                </svg>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="icon-btn" onclick="toggleDocsPanel()" title="Documents (RAG)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <line x1="10" y1="9" x2="8" y2="9" />
+                </svg>
+            </button>
+            <button class="icon-btn" onclick="resetChat()" title="Reset conversation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12a9 9 0 1 1 3 7" />
+                    <path d="M3 22v-7h7" />
+                </svg>
+            </button>
+            <button class="icon-btn" onclick="toggleSettings()" title="Settings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                        d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- ── Model Panel ─────────────────────────────────────── -->
+    <div class="panel-overlay" id="panelOverlay" onclick="closeAllPanels()"></div>
+
+    <div class="model-panel" id="modelPanel">
+        <div class="panel-header">
+            <h2>Model Library</h2>
+            <span class="disk-usage" id="diskUsage"></span>
+        </div>
+
+        <div class="panel-section">
+            <h3>Loaded</h3>
+            <div id="loadedModelSection" class="empty-state">No model loaded</div>
+        </div>
+
+        <div class="panel-section">
+            <h3>Downloaded</h3>
+            <div id="localModelsList" class="model-list"></div>
+        </div>
+
+        <div class="panel-section">
+            <h3>Available to Download</h3>
+            <div id="catalogModelsList" class="model-list"></div>
+        </div>
+
+    </div>
+
+    <!-- ── Documents Panel (Right Side) ────────────────────── -->
+    <div class="docs-panel" id="docsPanel">
+        <div class="panel-header">
+            <h2>📄 Documents</h2>
+            <span id="docsCount" style="font-size: 12px; color: var(--text-muted);"></span>
+        </div>
+        <div class="panel-section">
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileUpload" style="display:none" onchange="uploadDocument(this)"
+                    accept=".txt,.md,.pdf,.docx,.py,.js,.ts,.json,.csv,.log">
+                <button class="btn btn-secondary" onclick="document.getElementById('fileUpload').click()"
+                    style="width:100%">
+                    + Upload Document
+                </button>
+            </div>
+            <div id="ragDocsList" class="model-list" style="margin-top:8px"></div>
+        </div>
+        <div class="panel-section" style="border-top: 1px solid var(--border); padding-top: 12px;">
+            <div class="setting-row">
+                <label>Use documents as context</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="ragToggle" onchange="toggleRAG(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div id="ragStatusText" style="font-size: 11px; color: var(--text-muted); padding: 4px 0 0;">No documents
+                indexed</div>
+        </div>
+    </div>
+
+    <!-- ── Model Loading Overlay ────────────────────────────── -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3 id="loadingTitle">Loading Model</h3>
+            <p id="loadingDetail" class="loading-detail"></p>
+            <div class="loading-timer" id="loadingTimer">0.0s</div>
+        </div>
+    </div>
+
+    <!-- ── Settings Panel ──────────────────────────────────── -->
+    <div class="settings-panel" id="settingsPanel">
+        <div class="panel-header">
+            <h2>Settings</h2>
+        </div>
+        <div class="setting-row">
+            <label>Temperature</label>
+            <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0">
+            <span id="tempValue">1.0</span>
+        </div>
+        <div class="setting-row">
+            <label>Top-P</label>
+            <input type="range" id="topP" min="0.1" max="1.0" step="0.05" value="0.7">
+            <span id="topPValue">0.7</span>
+        </div>
+        <div class="setting-row">
+            <label>Max Tokens</label>
+            <input type="range" id="maxTokens" min="50" max="2000" step="50" value="500">
+            <span id="maxTokensValue">500</span>
+        </div>
+
+        <div class="panel-header" style="margin-top: 16px;">
+            <h3>Tools</h3>
+        </div>
+        <div class="setting-row">
+            <label>Enable tool calling</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="toolsToggle" checked onchange="toggleTools(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div id="toolsList" class="tools-list"></div>
+
+    </div>
+
+    <!-- ── Chat Area ───────────────────────────────────────── -->
+    <main id="chatArea">
+        <div id="messages">
+            <div class="welcome-message">
+                <div class="welcome-icon">🪹</div>
+                <h2>Welcome to Bird's Nest</h2>
+                <p>Local, non-transformer AI running on your Mac's GPU.</p>
+                <p class="welcome-hint">Load a model from the library to start chatting.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- ── Input Bar ───────────────────────────────────────── -->
+    <div class="input-area">
+        <div class="input-container">
+            <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
+                oninput="autoResize(this)"></textarea>
+            <button id="sendBtn" onclick="sendMessage()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+            </button>
+        </div>
+        <div class="input-footer">
+            <span id="statusText">Disconnected</span>
+            <span id="tokStats"></span>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=3"></script>
+</body>
+
+</html>

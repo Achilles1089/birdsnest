@@ -1,0 +1,352 @@
+########################################################################################################
+# Bird's Nest — Model Manager
+# Handles local model scanning, HuggingFace downloads, deletion, and metadata
+########################################################################################################
+
+import os, json, shutil, time
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+
+
+# ── Architecture Categories ─────────────────────────────────────────────────
+
+ARCH_CATEGORIES = {
+    "rwkv": {
+        "label": "RWKV",
+        "type": "Linear RNN",
+        "desc": "Recurrent neural network with linear attention — constant memory, infinite context, O(1) per token",
+        "color": "#7c6aef",
+    },
+    "mamba": {
+        "label": "Mamba",
+        "type": "State Space Model",
+        "desc": "Selective state space model — hardware-aware, linear complexity, faster than Transformers",
+        "color": "#34d399",
+    },
+    "xlstm": {
+        "label": "xLSTM",
+        "type": "Extended RNN",
+        "desc": "Modernized LSTM with exponential gating and matrix memory — by Sepp Hochreiter (LSTM inventor)",
+        "color": "#fbbf24",
+    },
+    "hyena": {
+        "label": "StripedHyena",
+        "type": "Conv + SSM Hybrid",
+        "desc": "Gated convolutions interleaved with attention — subquadratic, long-context specialist",
+        "color": "#f87171",
+    },
+}
+
+
+# ── Curated Model Catalog ───────────────────────────────────────────────────
+
+MODEL_CATALOG = [
+    # ── RWKV (Linear RNN) ──────────────────────────────────
+    {
+        "id": "rwkv7-g1-0.1b",
+        "name": "RWKV-7 GooseOne 0.1B",
+        "display_name": "GooseOne 0.1B",
+        "hf_repo": "BlinkDL/rwkv7-g1",
+        "hf_file": "rwkv7-g1d-0.1b.pth",
+        "architecture": "rwkv",
+        "version": "v7-g1",
+        "params": "0.1B",
+        "size_gb": 0.3,
+        "context": 8192,
+        "description": "Tiny — fast experiments, low RAM",
+    },
+    {
+        "id": "rwkv7-g1-0.4b",
+        "name": "RWKV-7 GooseOne 0.4B",
+        "display_name": "GooseOne 0.4B",
+        "hf_repo": "BlinkDL/rwkv7-g1",
+        "hf_file": "rwkv7-g1d-0.4b.pth",
+        "architecture": "rwkv",
+        "version": "v7-g1",
+        "params": "0.4B",
+        "size_gb": 0.8,
+        "context": 8192,
+        "description": "Small — decent quality, very fast",
+    },
+    {
+        "id": "rwkv7-g1-1.5b",
+        "name": "RWKV-7 GooseOne 1.5B",
+        "display_name": "GooseOne 1.5B",
+        "hf_repo": "BlinkDL/rwkv7-g1",
+        "hf_file": "rwkv7-g1d-1.5b.pth",
+        "architecture": "rwkv",
+        "version": "v7-g1",
+        "params": "1.5B",
+        "size_gb": 3.0,
+        "context": 8192,
+        "description": "Medium — good balance of quality and speed",
+    },
+    {
+        "id": "rwkv7-g1-2.9b",
+        "name": "RWKV-7 GooseOne 2.9B",
+        "display_name": "GooseOne 2.9B",
+        "hf_repo": "BlinkDL/rwkv7-g1",
+        "hf_file": "rwkv7-g1d-2.9b.pth",
+        "architecture": "rwkv",
+        "version": "v7-g1",
+        "params": "2.9B",
+        "size_gb": 5.6,
+        "context": 8192,
+        "description": "★ Recommended — best quality for Mac",
+    },
+    {
+        "id": "rwkv7-world-2.9b",
+        "name": "RWKV-7 Goose World 2.9B",
+        "display_name": "Goose World 2.9B",
+        "hf_repo": "BlinkDL/rwkv-7-world",
+        "hf_file": "RWKV-x070-World-2.9B-v3-20250211-ctx4096.pth",
+        "architecture": "rwkv",
+        "version": "v7",
+        "params": "2.9B",
+        "size_gb": 5.5,
+        "context": 4096,
+        "description": "Multilingual — 100+ languages",
+    },
+    {
+        "id": "rwkv6-world-1.6b",
+        "name": "RWKV-6 Finch 1.6B",
+        "display_name": "Finch 1.6B",
+        "hf_repo": "BlinkDL/rwkv-6-world",
+        "hf_file": "RWKV-x060-World-1B6-v2.1-20240328-ctx4096.pth",
+        "architecture": "rwkv",
+        "version": "v6",
+        "params": "1.6B",
+        "size_gb": 3.0,
+        "context": 4096,
+        "description": "Fastest — 22+ tok/s on MPS",
+    },
+    # ── Mamba (State Space Model) ──────────────────────────
+    {
+        "id": "mamba-2.8b",
+        "name": "Mamba 2.8B",
+        "display_name": "Mamba 2.8B",
+        "hf_repo": "state-spaces/mamba-2.8b-hf",
+        "hf_file": None,
+        "architecture": "mamba",
+        "version": "v1",
+        "params": "2.8B",
+        "size_gb": 5.6,
+        "context": 8192,
+        "description": "Largest Mamba — strong performance",
+    },
+    {
+        "id": "mamba-1.4b",
+        "name": "Mamba 1.4B",
+        "display_name": "Mamba 1.4B",
+        "hf_repo": "state-spaces/mamba-1.4b-hf",
+        "hf_file": None,
+        "architecture": "mamba",
+        "version": "v1",
+        "params": "1.4B",
+        "size_gb": 2.8,
+        "context": 8192,
+        "description": "Fast & efficient SSM",
+    },
+    # ── xLSTM (Extended RNN) ──────────────────────────────
+    {
+        "id": "xlstm-7b",
+        "name": "xLSTM 7B",
+        "display_name": "xLSTM 7B",
+        "hf_repo": "NX-AI/xLSTM-7b",
+        "hf_file": None,
+        "architecture": "xlstm",
+        "version": "v1",
+        "params": "7B",
+        "size_gb": 14.0,
+        "context": 8192,
+        "description": "Modernized LSTM with matrix memory",
+    },
+    # ── StripedHyena (Conv + SSM Hybrid) ──────────────────
+    {
+        "id": "stripedhyena-nous-7b",
+        "name": "StripedHyena-Nous 7B",
+        "display_name": "StripedHyena Chat 7B",
+        "hf_repo": "togethercomputer/StripedHyena-Nous-7B",
+        "hf_file": None,
+        "architecture": "hyena",
+        "version": "v1",
+        "params": "7B",
+        "size_gb": 14.0,
+        "context": 32768,
+        "description": "Chat-tuned — 32K context window",
+    },
+]
+
+
+class ModelManager:
+    """Manages local models folder and HuggingFace downloads."""
+
+    def __init__(self, models_dir: str):
+        self.models_dir = models_dir
+        os.makedirs(models_dir, exist_ok=True)
+
+    def list_local(self) -> List[Dict[str, Any]]:
+        """List all models downloaded to disk."""
+        models = []
+        for f in sorted(os.listdir(self.models_dir)):
+            if f.endswith('.pth') or f.endswith('.safetensors'):
+                path = os.path.join(self.models_dir, f)
+                size_gb = os.path.getsize(path) / 1024**3
+                name = f.replace('.pth', '').replace('.safetensors', '')
+
+                # Match to catalog
+                catalog_entry = self._match_catalog(f)
+                arch = catalog_entry.get("architecture", "unknown") if catalog_entry else self._guess_arch(f)
+                version = catalog_entry.get("version", "?") if catalog_entry else "?"
+                display_name = catalog_entry.get("display_name", name) if catalog_entry else self._clean_name(name)
+
+                models.append({
+                    "name": name,
+                    "display_name": display_name,
+                    "filename": f,
+                    "path": path,
+                    "size_gb": round(size_gb, 1),
+                    "architecture": arch,
+                    "version": version,
+                    "catalog_id": catalog_entry["id"] if catalog_entry else None,
+                    "description": catalog_entry.get("description", "") if catalog_entry else "",
+                })
+        return models
+
+    def list_available(self) -> List[Dict[str, Any]]:
+        """List all models from catalog, marking which are downloaded."""
+        local = {m["filename"] for m in self.list_local()}
+        result = []
+        for entry in MODEL_CATALOG:
+            filename = entry.get("hf_file") or f"{entry['id']}.safetensors"
+            result.append({
+                **entry,
+                "downloaded": filename in local or any(
+                    entry["id"].replace("-", "").replace(".", "") in f.replace("-", "").replace(".", "")
+                    for f in local
+                ),
+            })
+        return result
+
+    def get_model_path(self, name_or_id: str) -> Optional[str]:
+        """Find a model by name or catalog ID."""
+        for m in self.list_local():
+            if m["name"] == name_or_id or m.get("catalog_id") == name_or_id:
+                return m["path"]
+            # Fuzzy match
+            if name_or_id.lower() in m["name"].lower():
+                return m["path"]
+        return None
+
+    def delete(self, name_or_filename: str) -> Dict[str, Any]:
+        """Delete a model from disk."""
+        for m in self.list_local():
+            if m["name"] == name_or_filename or m["filename"] == name_or_filename:
+                path = m["path"]
+                size = m["size_gb"]
+                os.remove(path)
+                return {"deleted": m["name"], "freed_gb": size}
+        return {"error": f"Model not found: {name_or_filename}"}
+
+    def download(self, catalog_id: str, progress_callback=None) -> Dict[str, Any]:
+        """Download a model from HuggingFace."""
+        entry = next((e for e in MODEL_CATALOG if e["id"] == catalog_id), None)
+        if not entry:
+            return {"error": f"Unknown model: {catalog_id}"}
+
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError:
+            return {"error": "huggingface_hub not installed. Run: pip install huggingface-hub"}
+
+        hf_repo = entry["hf_repo"]
+        hf_file = entry.get("hf_file")
+
+        if hf_file:
+            # Direct file download (RWKV .pth files)
+            dest = os.path.join(self.models_dir, hf_file)
+            if os.path.exists(dest):
+                return {"status": "already_exists", "path": dest}
+
+            t0 = time.time()
+            downloaded = hf_hub_download(
+                repo_id=hf_repo,
+                filename=hf_file,
+                local_dir=self.models_dir,
+                local_dir_use_symlinks=False,
+            )
+            elapsed = time.time() - t0
+            return {
+                "status": "downloaded",
+                "path": downloaded,
+                "time": round(elapsed, 1),
+                "size_gb": entry["size_gb"],
+            }
+        else:
+            # HF Transformers model — download entire repo
+            from huggingface_hub import snapshot_download
+            dest = os.path.join(self.models_dir, catalog_id)
+            if os.path.exists(dest):
+                return {"status": "already_exists", "path": dest}
+
+            t0 = time.time()
+            downloaded = snapshot_download(
+                repo_id=hf_repo,
+                local_dir=dest,
+                local_dir_use_symlinks=False,
+            )
+            elapsed = time.time() - t0
+            return {
+                "status": "downloaded",
+                "path": downloaded,
+                "time": round(elapsed, 1),
+                "size_gb": entry["size_gb"],
+            }
+
+    def disk_usage(self) -> Dict[str, Any]:
+        """Get total disk usage of models directory."""
+        total = 0
+        count = 0
+        supported_ext = ('.pth', '.safetensors')
+        for f in os.listdir(self.models_dir):
+            path = os.path.join(self.models_dir, f)
+            if os.path.isfile(path):
+                size = os.path.getsize(path)
+                total += size
+                if f.endswith(supported_ext):
+                    count += 1
+            elif os.path.isdir(path):
+                for root, dirs, files in os.walk(path):
+                    for ff in files:
+                        total += os.path.getsize(os.path.join(root, ff))
+                count += 1
+        return {"total_gb": round(total / 1024**3, 1), "model_count": count}
+
+    def _match_catalog(self, filename: str) -> Optional[Dict]:
+        """Try to match a local file to a catalog entry."""
+        for entry in MODEL_CATALOG:
+            if entry.get("hf_file") == filename:
+                return entry
+        return None
+
+    def _guess_arch(self, filename: str) -> str:
+        """Guess architecture from filename."""
+        fn = filename.lower()
+        if 'rwkv' in fn or 'x060' in fn or 'x070' in fn:
+            return "rwkv"
+        if 'mamba' in fn:
+            return "mamba"
+        if 'xlstm' in fn:
+            return "xlstm"
+        if 'hyena' in fn:
+            return "hyena"
+        return "unknown"
+
+    def _clean_name(self, name: str) -> str:
+        """Make a clean display name from a raw filename."""
+        # RWKV-x060-World-1B6-v2.1-20240328-ctx4096 → Finch 1.6B
+        if 'x060' in name:
+            return 'Finch ' + name.split('-')[3] if len(name.split('-')) > 3 else name
+        if 'x070' in name:
+            return 'Goose ' + name.split('-')[3] if len(name.split('-')) > 3 else name
+        return name
