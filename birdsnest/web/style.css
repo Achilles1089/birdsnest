@@ -428,6 +428,45 @@ header h1 {
     border: 1px solid rgba(34, 211, 238, 0.3);
 }
 
+/* ── Thinking Block (G1 models) ─────────────────────── */
+.think-block {
+    margin: 8px 0;
+    padding: 10px 12px;
+    background: rgba(34, 211, 238, 0.05);
+    border-left: 3px solid rgba(34, 211, 238, 0.4);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.think-header {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #22d3ee;
+    user-select: none;
+    list-style: none;
+}
+
+.think-header::before {
+    content: '▶ ';
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.think-block[open] .think-header::before {
+    content: '▼ ';
+}
+
+.think-content {
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .model-card-desc {
     font-size: 12px;
     color: var(--text-muted);

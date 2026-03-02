@@ -445,8 +445,16 @@ class RWKVEngine(InferenceEngine):
             for t in sys_tokens:
                 self._forward(t)
 
+        # Detect G1 thinking model
+        is_g1 = self.model_name and 'g1' in self.model_name.lower() and 'rwkv7' in self.model_name.lower()
+
         # Encode and feed the actual user prompt
-        prompt_tokens = self.tokenizer.encode(f"User: {prompt}\n\nAssistant:")
+        if is_g1:
+            # G1 thinking format — seed with <think to trigger reasoning
+            prompt_tokens = self.tokenizer.encode(f"User: {prompt}\n\nAssistant: <think\n")
+            yield "<think>\n"  # Signal frontend that thinking mode is active
+        else:
+            prompt_tokens = self.tokenizer.encode(f"User: {prompt}\n\nAssistant:")
         out = None
         for t in prompt_tokens:
             out = self._forward(t)
