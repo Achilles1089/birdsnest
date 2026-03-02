@@ -132,7 +132,7 @@ function connectWebSocket() {
                         }, 1000);
                     }
 
-                    textEl.innerHTML += '<span class="typing-indicator"></span>';
+                    textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                     scrollToBottom();
                     setStatus(slowMsg ? `${slowMsg}...` : 'Executing tool...', 'yellow');
                 }

@@ -187,14 +187,23 @@ class ModelManager:
 
     def list_local(self) -> List[Dict[str, Any]]:
         """List all models downloaded to disk."""
+        MODEL_EXTENSIONS = ('.pth', '.safetensors', '.gguf')
         models = []
         for f in sorted(os.listdir(self.models_dir)):
-            if f.endswith('.pth') or f.endswith('.safetensors'):
-                path = os.path.join(self.models_dir, f)
-                size_gb = os.path.getsize(path) / 1024**3
-                name = f.replace('.pth', '').replace('.safetensors', '')
+            path = os.path.join(self.models_dir, f)
 
-                # Match to catalog
+            # Skip hidden/cache dirs
+            if f.startswith('.'):
+                continue
+
+            # ── File-based models ──
+            if any(f.endswith(ext) for ext in MODEL_EXTENSIONS):
+                size_gb = os.path.getsize(path) / 1024**3
+                # Strip extension for name
+                name = f
+                for ext in MODEL_EXTENSIONS:
+                    name = name.replace(ext, '')
+
                 catalog_entry = self._match_catalog(f)
                 arch = catalog_entry.get("architecture", "unknown") if catalog_entry else self._guess_arch(f)
                 version = catalog_entry.get("version", "?") if catalog_entry else "?"
@@ -211,6 +220,35 @@ class ModelManager:
                     "catalog_id": catalog_entry["id"] if catalog_entry else None,
                     "description": catalog_entry.get("description", "") if catalog_entry else "",
                 })
+
+            # ── Directory-based models (Mamba, etc.) ──
+            elif os.path.isdir(path):
+                config_path = os.path.join(path, "config.json")
+                if os.path.exists(config_path):
+                    # Calculate total dir size
+                    total_size = sum(
+                        os.path.getsize(os.path.join(dp, fn))
+                        for dp, _, fns in os.walk(path) for fn in fns
+                    )
+                    size_gb = total_size / 1024**3
+
+                    catalog_entry = self._match_catalog(f)
+                    arch = catalog_entry.get("architecture", "unknown") if catalog_entry else self._guess_arch(f)
+                    version = catalog_entry.get("version", "?") if catalog_entry else "?"
+                    display_name = catalog_entry.get("display_name", f) if catalog_entry else self._clean_name(f)
+
+                    models.append({
+                        "name": f,
+                        "display_name": display_name,
+                        "filename": f,
+                        "path": path,
+                        "size_gb": round(size_gb, 1),
+                        "architecture": arch,
+                        "version": version,
+                        "catalog_id": catalog_entry["id"] if catalog_entry else None,
+                        "description": catalog_entry.get("description", "") if catalog_entry else "",
+                    })
+
         return models
 
     def list_available(self) -> List[Dict[str, Any]]:
