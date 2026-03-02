@@ -619,7 +619,20 @@ const IMAGE_MODEL_CATALOG = [
 
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
 
-function loadImageModels() {
+async function loadImageModels() {
+    // Fetch installed from server
+    let installed = [];
+    try {
+        const res = await fetch('/api/image-models');
+        const data = await res.json();
+        installed = data.installed || [];
+        if (data.active) activeImageModel = data.active;
+    } catch { }
+
+    // Tab badge
+    const imgBadge = document.getElementById('badgeImage');
+    if (imgBadge) imgBadge.textContent = installed.length || '';
+
     // Active model display
     const active = IMAGE_MODEL_CATALOG.find(m => m.id === activeImageModel) || IMAGE_MODEL_CATALOG[0];
     document.getElementById('activeImageModel').innerHTML = `
@@ -636,17 +649,27 @@ function loadImageModels() {
     `;
     document.getElementById('activeImageModel').className = '';
 
-    // Tab badge
-    const imgBadge = document.getElementById('badgeImage');
-    if (imgBadge) imgBadge.textContent = IMAGE_MODEL_CATALOG.length;
+    // Installed models from HF cache (with delete)
+    const installedSection = document.getElementById('imageInstalledList');
+    if (installedSection) {
+        installedSection.innerHTML = installed.length > 0
+            ? installed.map(m => `
+                <div class="model-card">
+                    <div class="model-card-header">
+                        <span class="model-card-name">${m.id}</span>
+                        <span class="badge badge-size" style="color:#4ade80">${m.size_gb} GB</span>
+                    </div>
+                    <div class="model-card-actions">
+                        <button class="btn btn-danger" onclick="deleteHfModel('image', '${m.dir_name}', '${m.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="empty-state">No image models cached yet</div>';
+    }
 
-    // Available models list
+    // Available catalog (with select)
     const list = document.getElementById('imageModelsList');
     const others = IMAGE_MODEL_CATALOG.filter(m => m.id !== activeImageModel);
-    if (others.length === 0) {
-        list.innerHTML = '<div class="empty-state">All models selected</div>';
-        return;
-    }
     list.innerHTML = others.map(m => `
         <div class="model-card">
             <div class="model-card-header">
@@ -674,6 +697,26 @@ async function selectImageModel(id) {
         body: JSON.stringify({ model: id }),
     });
     loadImageModels();
+}
+
+// ── Unified HF Model Delete ─────────────────────────
+async function deleteHfModel(type, dirName, displayName) {
+    if (!confirm(`Delete ${displayName}?\nThis will remove it from the HuggingFace cache and free disk space.`)) return;
+    try {
+        const res = await fetch(`/api/${type}-models/${encodeURIComponent(dirName)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            addSystemMessage(`Deleted ${displayName} — freed ${data.freed_gb} GB`);
+            // Reload the appropriate tab
+            if (type === 'image') loadImageModels();
+            else if (type === 'music') loadMusicModels();
+            else if (type === 'embed') loadEmbeddingModels();
+        } else {
+            addSystemMessage(data.error || 'Delete failed', 'error');
+        }
+    } catch (e) {
+        addSystemMessage(`Delete failed: ${e.message}`, 'error');
+    }
 }
 
 // ── Translation Models (Opus-MT) ──────────────────────
@@ -791,7 +834,20 @@ const MUSIC_MODEL_CATALOG = [
 
 let activeMusicModel = localStorage.getItem('birdsnest_music_model') || 'small';
 
-function loadMusicModels() {
+async function loadMusicModels() {
+    // Fetch installed from server
+    let installed = [];
+    try {
+        const res = await fetch('/api/music-models');
+        const data = await res.json();
+        installed = data.installed || [];
+    } catch { }
+
+    // Tab badge
+    const badge = document.getElementById('badgeMusic');
+    if (badge) badge.textContent = installed.length || '';
+
+    // Active model display
     const active = MUSIC_MODEL_CATALOG.find(m => m.id === activeMusicModel) || MUSIC_MODEL_CATALOG[0];
     document.getElementById('activeMusicModel').innerHTML = `
         <div class="model-card">
@@ -807,6 +863,25 @@ function loadMusicModels() {
     `;
     document.getElementById('activeMusicModel').className = '';
 
+    // Installed from HF cache (with delete)
+    const installedSection = document.getElementById('musicInstalledList');
+    if (installedSection) {
+        installedSection.innerHTML = installed.length > 0
+            ? installed.map(m => `
+                <div class="model-card">
+                    <div class="model-card-header">
+                        <span class="model-card-name">${m.id}</span>
+                        <span class="badge badge-size" style="color:#4ade80">${m.size_gb} GB</span>
+                    </div>
+                    <div class="model-card-actions">
+                        <button class="btn btn-danger" onclick="deleteHfModel('music', '${m.dir_name}', '${m.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="empty-state">No MusicGen models cached</div>';
+    }
+
+    // Available catalog
     const list = document.getElementById('musicModelsList');
     const others = MUSIC_MODEL_CATALOG.filter(m => m.id !== activeMusicModel);
     list.innerHTML = others.map(m => `
@@ -847,7 +922,20 @@ const EMBED_MODEL_CATALOG = [
 
 let activeEmbedModel = localStorage.getItem('birdsnest_embed_model') || 'tfidf';
 
-function loadEmbeddingModels() {
+async function loadEmbeddingModels() {
+    // Fetch installed from server
+    let installed = [];
+    try {
+        const res = await fetch('/api/embed-models');
+        const data = await res.json();
+        installed = data.installed || [];
+    } catch { }
+
+    // Tab badge
+    const badge = document.getElementById('badgeEmbed');
+    if (badge) badge.textContent = installed.length || '';
+
+    // Active model display
     const active = EMBED_MODEL_CATALOG.find(m => m.id === activeEmbedModel) || EMBED_MODEL_CATALOG[0];
     document.getElementById('activeEmbedModel').innerHTML = `
         <div class="model-card">
@@ -863,6 +951,25 @@ function loadEmbeddingModels() {
     `;
     document.getElementById('activeEmbedModel').className = '';
 
+    // Installed from HF cache (with delete)
+    const installedSection = document.getElementById('embedInstalledList');
+    if (installedSection) {
+        installedSection.innerHTML = installed.length > 0
+            ? installed.map(m => `
+                <div class="model-card">
+                    <div class="model-card-header">
+                        <span class="model-card-name">${m.id}</span>
+                        <span class="badge badge-size" style="color:#4ade80">${m.size_gb} GB</span>
+                    </div>
+                    <div class="model-card-actions">
+                        <button class="btn btn-danger" onclick="deleteHfModel('embed', '${m.dir_name}', '${m.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="empty-state">No embedding models cached</div>';
+    }
+
+    // Available catalog
     const list = document.getElementById('embedModelsList');
     const others = EMBED_MODEL_CATALOG.filter(m => m.id !== activeEmbedModel);
     list.innerHTML = others.map(m => `

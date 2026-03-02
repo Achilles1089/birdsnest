@@ -194,8 +194,10 @@
                     id="badgeImage"></span></button>
             <button class="model-tab" data-tab="translation" onclick="switchModelTab('translation')">🌐 Lang <span
                     class="tab-badge" id="badgeLang"></span></button>
-            <button class="model-tab" data-tab="music" onclick="switchModelTab('music')">🎵 Music</button>
-            <button class="model-tab" data-tab="embed" onclick="switchModelTab('embed')">📎 Embed</button>
+            <button class="model-tab" data-tab="music" onclick="switchModelTab('music')">🎵 Music <span
+                    class="tab-badge" id="badgeMusic"></span></button>
+            <button class="model-tab" data-tab="embed" onclick="switchModelTab('embed')">📎 Embed <span
+                    class="tab-badge" id="badgeEmbed"></span></button>
         </div>
 
         <!-- AI Models Tab (existing) -->
@@ -219,6 +221,10 @@
             <div class="panel-section">
                 <h3>Active Model</h3>
                 <div id="activeImageModel" class="empty-state">Flux Schnell (default)</div>
+            </div>
+            <div class="panel-section">
+                <h3>Installed (HF Cache)</h3>
+                <div id="imageInstalledList" class="model-list"></div>
             </div>
             <div class="panel-section">
                 <h3>Available</h3>
@@ -245,6 +251,10 @@
                 <div id="activeMusicModel" class="empty-state">MusicGen Small (default)</div>
             </div>
             <div class="panel-section">
+                <h3>Installed (HF Cache)</h3>
+                <div id="musicInstalledList" class="model-list"></div>
+            </div>
+            <div class="panel-section">
                 <h3>Available</h3>
                 <div id="musicModelsList" class="model-list"></div>
             </div>
@@ -255,6 +265,10 @@
             <div class="panel-section">
                 <h3>Active Model</h3>
                 <div id="activeEmbedModel" class="empty-state">Default (TF-IDF)</div>
+            </div>
+            <div class="panel-section">
+                <h3>Installed (HF Cache)</h3>
+                <div id="embedInstalledList" class="model-list"></div>
             </div>
             <div class="panel-section">
                 <h3>Available</h3>

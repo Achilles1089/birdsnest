@@ -131,16 +131,69 @@ async def system_stats():
         "loaded": active_engine.model_name if active_engine and active_engine.is_loaded else None,
     }
 
+# ── HuggingFace Cache Helper ─────────────────────────────────────────────────
+
+def _scan_hf_cache(prefix_filter: str):
+    """Scan HF hub cache for model dirs matching a prefix. Returns list of {id, dir_name, size_gb}."""
+    import pathlib
+    cache_dir = pathlib.Path.home() / ".cache" / "huggingface" / "hub"
+    results = []
+    if not cache_dir.exists():
+        return results
+    for d in cache_dir.iterdir():
+        if d.is_dir() and d.name.startswith("models--") and prefix_filter in d.name:
+            # Calculate size
+            size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+            size_gb = round(size_bytes / 1024**3, 2)
+            # Extract model id from dir name (models--org--name → org/name)
+            model_id = d.name.replace("models--", "").replace("--", "/", 1)
+            results.append({"id": model_id, "dir_name": d.name, "size_gb": size_gb})
+    return results
+
+
+def _delete_hf_model(dir_name: str):
+    """Delete a model from HF cache by directory name. Returns freed_gb."""
+    import pathlib
+    import shutil
+    cache_dir = pathlib.Path.home() / ".cache" / "huggingface" / "hub"
+    model_dir = cache_dir / dir_name
+    if model_dir.exists():
+        size_bytes = sum(f.stat().st_size for f in model_dir.rglob("*") if f.is_file())
+        freed_gb = round(size_bytes / 1024**3, 2)
+        shutil.rmtree(model_dir)
+        return {"success": True, "freed_gb": freed_gb}
+    return {"success": False, "error": "Model directory not found"}
+
+
 # ── REST API: Image Models ───────────────────────────────────────────────────
 
 active_image_model = "schnell"
+
+# mflux caches models under ~/.cache/huggingface/hub with prefix "black-forest-labs"
+# Also check for mflux-specific cache dirs
+IMAGE_HF_PREFIXES = ["black-forest-labs", "FLUX", "mflux"]
+
+@app.get("/api/image-models")
+async def list_image_models():
+    """Check which Flux/mflux image models are cached locally."""
+    installed = []
+    for prefix in IMAGE_HF_PREFIXES:
+        installed.extend(_scan_hf_cache(prefix))
+    # Deduplicate by dir_name
+    seen = set()
+    unique = []
+    for m in installed:
+        if m["dir_name"] not in seen:
+            seen.add(m["dir_name"])
+            unique.append(m)
+    return {"installed": unique, "active": active_image_model}
+
 
 @app.post("/api/image-models/select")
 async def select_image_model(request: Request):
     global active_image_model
     data = await request.json()
     active_image_model = data.get("model", "schnell")
-    # Write to workspace so tools.py can read it
     from pathlib import Path
     config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +201,20 @@ async def select_image_model(request: Request):
     return {"success": True, "model": active_image_model}
 
 
+@app.delete("/api/image-models/{dir_name}")
+async def delete_image_model(dir_name: str):
+    """Delete a cached image model from HF hub cache."""
+    return _delete_hf_model(dir_name)
+
+
 # ── REST API: Music Models ───────────────────────────────────────────────────
+
+@app.get("/api/music-models")
+async def list_music_models():
+    """Check which MusicGen models are cached locally."""
+    installed = _scan_hf_cache("facebook--musicgen")
+    return {"installed": installed}
+
 
 @app.post("/api/music-models/select")
 async def select_music_model(request: Request):
@@ -159,6 +225,37 @@ async def select_music_model(request: Request):
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(model_size)
     return {"success": True, "model": model_size}
+
+
+@app.delete("/api/music-models/{dir_name}")
+async def delete_music_model(dir_name: str):
+    """Delete a cached MusicGen model from HF hub cache."""
+    return _delete_hf_model(dir_name)
+
+
+# ── REST API: Embed Models ───────────────────────────────────────────────────
+
+EMBED_HF_PREFIXES = ["sentence-transformers", "BAAI", "nomic-ai"]
+
+@app.get("/api/embed-models")
+async def list_embed_models():
+    """Check which embedding models are cached locally."""
+    installed = []
+    for prefix in EMBED_HF_PREFIXES:
+        installed.extend(_scan_hf_cache(prefix))
+    seen = set()
+    unique = []
+    for m in installed:
+        if m["dir_name"] not in seen:
+            seen.add(m["dir_name"])
+            unique.append(m)
+    return {"installed": unique}
+
+
+@app.delete("/api/embed-models/{dir_name}")
+async def delete_embed_model(dir_name: str):
+    """Delete a cached embedding model from HF hub cache."""
+    return _delete_hf_model(dir_name)
 
 
 # ── REST API: Translation Models ─────────────────────────────────────────────
