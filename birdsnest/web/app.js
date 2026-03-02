@@ -59,52 +59,64 @@ function connectWebSocket() {
                     if (cursor) cursor.remove();
 
                     const content = data.content;
-
-                    // ── Thinking mode detection ──
-                    if (!window._thinkState) window._thinkState = { active: false, buffer: '' };
                     const ts = window._thinkState;
 
-                    if (content.includes('<think>') || (ts.buffer + content).includes('<think>')) {
-                        // Enter thinking mode — create collapsible block
-                        ts.active = true;
-                        ts.buffer = '';
-                        const thinkBlock = document.createElement('details');
-                        thinkBlock.className = 'think-block';
-                        thinkBlock.open = true;
-                        thinkBlock.innerHTML = '<summary class="think-header">🧠 Thinking…</summary><div class="think-content"></div>';
-                        textEl.appendChild(thinkBlock);
-                        // Strip <think> tag from content, keep any text after it
-                        const afterTag = content.split('<think>').pop().replace(/^\n/, '');
-                        if (afterTag) {
-                            thinkBlock.querySelector('.think-content').textContent += afterTag;
+                    // Accumulate into buffer
+                    ts.buffer += content;
+
+                    if (!ts.active) {
+                        // Not yet in thinking mode — check if buffer contains <think>
+                        const thinkIdx = ts.buffer.indexOf('<think>');
+                        if (thinkIdx !== -1) {
+                            // Enter thinking mode
+                            ts.active = true;
+                            const thinkBlock = document.createElement('details');
+                            thinkBlock.className = 'think-block';
+                            thinkBlock.open = true;
+                            thinkBlock.innerHTML = '<summary class="think-header">🧠 Thinking…</summary><div class="think-content"></div>';
+                            textEl.appendChild(thinkBlock);
+                            // Keep only text after <think> in buffer for processing
+                            ts.buffer = ts.buffer.slice(thinkIdx + 7);
+                            // Fall through to process buffer as thinking content
+                        } else if (ts.buffer.length > 10 && !ts.buffer.includes('<')) {
+                            // Definitely not a think tag — flush buffer as normal text
+                            textEl.appendChild(document.createTextNode(ts.buffer));
+                            ts.buffer = '';
                         }
-                    } else if (ts.active && content.includes('</think>')) {
-                        // Exit thinking mode
-                        ts.active = false;
-                        const thinkBlock = textEl.querySelector('.think-block');
-                        if (thinkBlock) {
-                            // Add any text before </think> to thinking content
-                            const beforeTag = content.split('</think>')[0];
-                            if (beforeTag) {
-                                thinkBlock.querySelector('.think-content').textContent += beforeTag;
+                        // else keep buffering — might still be building "<think>"
+                    }
+
+                    if (ts.active) {
+                        // In thinking mode — check buffer for </think>
+                        const closeIdx = ts.buffer.indexOf('</think>');
+                        if (closeIdx !== -1) {
+                            // Found close tag — split content
+                            const thinkText = ts.buffer.slice(0, closeIdx);
+                            const afterText = ts.buffer.slice(closeIdx + 8).replace(/^\n/, '');
+                            ts.buffer = '';
+                            ts.active = false;
+
+                            const thinkBlock = textEl.querySelector('.think-block');
+                            if (thinkBlock) {
+                                if (thinkText) {
+                                    thinkBlock.querySelector('.think-content').textContent += thinkText;
+                                }
+                                thinkBlock.querySelector('.think-header').textContent = '🧠 Thought process';
+                                thinkBlock.open = false;
                             }
-                            thinkBlock.querySelector('.think-header').textContent = '🧠 Thought process';
-                            thinkBlock.open = false; // Collapse after done
+                            // Render response text after think block
+                            if (afterText) {
+                                textEl.appendChild(document.createTextNode(afterText));
+                            }
+                        } else {
+                            // Still thinking — flush safe content (keep last 8 chars in buffer for boundary detection)
+                            const thinkContent = textEl.querySelector('.think-block .think-content');
+                            if (thinkContent && ts.buffer.length > 8) {
+                                const safe = ts.buffer.slice(0, -8);
+                                ts.buffer = ts.buffer.slice(-8);
+                                thinkContent.textContent += safe;
+                            }
                         }
-                        // Any text after </think> is the actual response
-                        const afterTag = content.split('</think>').pop().replace(/^\n/, '');
-                        if (afterTag) {
-                            textEl.appendChild(document.createTextNode(afterTag));
-                        }
-                    } else if (ts.active) {
-                        // Inside thinking — append to think block
-                        const thinkContent = textEl.querySelector('.think-block .think-content');
-                        if (thinkContent) {
-                            thinkContent.textContent += content;
-                        }
-                    } else {
-                        // Normal token — append as text
-                        textEl.appendChild(document.createTextNode(content));
                     }
 
                     textEl.innerHTML += '<span class="typing-indicator"></span>';
@@ -118,6 +130,27 @@ function connectWebSocket() {
                     const textEl = currentStreamEl.querySelector('.message-text');
                     const cursor = textEl.querySelector('.typing-indicator');
                     if (cursor) cursor.remove();
+
+                    // Flush any remaining think buffer
+                    const ts = window._thinkState;
+                    if (ts && ts.buffer) {
+                        if (ts.active) {
+                            // Still in thinking mode — flush to think block and close it
+                            const thinkContent = textEl.querySelector('.think-block .think-content');
+                            const thinkBlock = textEl.querySelector('.think-block');
+                            const cleaned = ts.buffer.replace(/<\/?think>/g, '');
+                            if (thinkContent && cleaned) thinkContent.textContent += cleaned;
+                            if (thinkBlock) {
+                                thinkBlock.querySelector('.think-header').textContent = '🧠 Thought process';
+                                thinkBlock.open = false;
+                            }
+                        } else {
+                            // Non-think buffer — flush as normal text
+                            textEl.appendChild(document.createTextNode(ts.buffer));
+                        }
+                        ts.buffer = '';
+                        ts.active = false;
+                    }
 
                     // Detect if this was a tool-only response (has tool elements, no streamed text)
                     const hasToolResult = textEl.querySelector('.tool-result') !== null;
