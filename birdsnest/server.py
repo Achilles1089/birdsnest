@@ -328,13 +328,6 @@ async def websocket_chat(websocket: WebSocket):
             data = await websocket.receive_text()
             msg = json.loads(data)
 
-            if not active_engine or not active_engine.is_loaded:
-                await websocket.send_json({
-                    "type": "error",
-                    "content": "No model loaded. Load one from the model library."
-                })
-                continue
-
             prompt = msg.get("message", "")
             temperature = msg.get("temperature", 1.0)
             top_p = msg.get("top_p", 0.7)
@@ -345,15 +338,7 @@ async def websocket_chat(websocket: WebSocket):
             if not prompt.strip():
                 continue
 
-            # RAG context injection
-            rag_context = ""
-            if use_rag and rag_available and rag_pipeline:
-                try:
-                    rag_context = rag_pipeline.build_context(prompt, top_k=5)
-                except Exception:
-                    pass
-
-            # ── Server-side intent detection (runs BEFORE model) ──
+            # ── Server-side intent detection (runs BEFORE model check) ──
             intent_handled = False
             if use_tools and get_enabled_tools():
                 from birdsnest.tools import detect_user_intent
@@ -361,13 +346,15 @@ async def websocket_chat(websocket: WebSocket):
                 if intent:
                     tool_name, tool_args = intent
 
-                    # Send start marker
-                    nickname = active_engine.model_name
-                    for m in model_manager.list_local():
-                        if m["name"] == active_engine.model_name:
-                            nickname = m.get("display_name", active_engine.model_name)
-                            break
-                    await websocket.send_json({"type": "start", "model": active_engine.model_name, "nickname": nickname})
+                    # Send start marker — use model name if loaded, else fallback
+                    model_label = "Bird's Nest"
+                    if active_engine and active_engine.is_loaded:
+                        model_label = active_engine.model_name
+                        for m in model_manager.list_local():
+                            if m["name"] == active_engine.model_name:
+                                model_label = m.get("display_name", active_engine.model_name)
+                                break
+                    await websocket.send_json({"type": "start", "model": model_label, "nickname": model_label})
 
                     t0 = time.time()
 
@@ -397,6 +384,24 @@ async def websocket_chat(websocket: WebSocket):
 
             if intent_handled:
                 continue
+
+            # ── Model required for non-tool messages ──
+            if not active_engine or not active_engine.is_loaded:
+                await websocket.send_json({
+                    "type": "error",
+                    "content": "No model loaded. Load one from the model library. (Tools still work — try the sidebar!)"
+                })
+                continue
+
+
+
+            # RAG context injection
+            rag_context = ""
+            if use_rag and rag_available and rag_pipeline:
+                try:
+                    rag_context = rag_pipeline.build_context(prompt, top_k=5)
+                except Exception:
+                    pass
 
             # User prompt stays clean — just the user's message + any RAG context
             user_prompt = (rag_context or "") + prompt
