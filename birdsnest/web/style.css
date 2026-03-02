@@ -131,6 +131,57 @@ header h1 {
 .header-right {
     display: flex;
     gap: 4px;
+    align-items: center;
+}
+
+.system-stats {
+    display: none;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    margin-right: 4px;
+    white-space: nowrap;
+    animation: fadeSlideIn 0.2s ease;
+}
+
+.system-stats.visible {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.system-stats .stat-label {
+    color: var(--text-muted);
+}
+
+.system-stats .stat-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.system-stats .stat-divider {
+    color: var(--border);
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+#systemMonitorBtn.active {
+    color: #8b9cf7;
+    background: rgba(139, 156, 247, 0.1);
 }
 
 .icon-btn {

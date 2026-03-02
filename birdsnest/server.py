@@ -105,6 +105,32 @@ class ChatMessage(BaseModel):
     max_tokens: int = 500
 
 
+# ── REST API: System Stats ───────────────────────────────────────────────────
+
+@app.get("/api/system-stats")
+async def system_stats():
+    """Return process RAM usage and total model disk usage."""
+    import resource
+    # macOS: ru_maxrss is in bytes, Linux: in kilobytes
+    import sys
+    rusage = resource.getrusage(resource.RUSAGE_SELF)
+    if sys.platform == "darwin":
+        ram_bytes = rusage.ru_maxrss  # bytes on macOS
+    else:
+        ram_bytes = rusage.ru_maxrss * 1024  # KB on Linux
+
+    ram_gb = round(ram_bytes / 1024**3, 2)
+
+    # Disk usage from all models
+    disk = model_manager.disk_usage()
+
+    return {
+        "ram_gb": ram_gb,
+        "disk_gb": disk.get("total_gb", 0),
+        "model_count": disk.get("model_count", 0),
+        "loaded": active_engine.model_name if active_engine and active_engine.is_loaded else None,
+    }
+
 # ── REST API: Models ────────────────────────────────────────────────────────
 
 @app.get("/api/models")

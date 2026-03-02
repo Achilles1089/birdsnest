@@ -577,6 +577,45 @@ function toggleModelPanel() {
     }
 }
 
+// ── System Monitor ──────────────────────────────────
+let _systemMonitorInterval = null;
+
+function toggleSystemMonitor() {
+    const statsEl = document.getElementById('systemStats');
+    const btn = document.getElementById('systemMonitorBtn');
+    const isVisible = statsEl.classList.contains('visible');
+
+    if (isVisible) {
+        statsEl.classList.remove('visible');
+        btn.classList.remove('active');
+        if (_systemMonitorInterval) {
+            clearInterval(_systemMonitorInterval);
+            _systemMonitorInterval = null;
+        }
+    } else {
+        statsEl.classList.add('visible');
+        btn.classList.add('active');
+        fetchSystemStats();
+        _systemMonitorInterval = setInterval(fetchSystemStats, 5000);
+    }
+}
+
+async function fetchSystemStats() {
+    try {
+        const res = await fetch('/api/system-stats');
+        const data = await res.json();
+        const statsEl = document.getElementById('systemStats');
+        statsEl.innerHTML = `
+            <span><span class="stat-label">RAM</span> <span class="stat-value">${data.ram_gb} GB</span></span>
+            <span class="stat-divider">│</span>
+            <span><span class="stat-label">Disk</span> <span class="stat-value">${data.disk_gb} GB</span></span>
+            <span class="stat-divider">│</span>
+            <span><span class="stat-label">Models</span> <span class="stat-value">${data.model_count}</span></span>
+            ${data.loaded ? `<span class="stat-divider">│</span><span><span class="stat-value" style="color:#8b9cf7">● ${data.loaded.split('-').pop()}</span></span>` : ''}
+        `;
+    } catch { }
+}
+
 function toggleSettings() {
     const panel = document.getElementById('settingsPanel');
     const overlay = document.getElementById('panelOverlay');
