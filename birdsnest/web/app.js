@@ -610,11 +610,11 @@ function switchModelTab(tab) {
 
 // ── Image Models (mflux) ──────────────────────────────
 const IMAGE_MODEL_CATALOG = [
-    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, desc: 'Fast — 4 steps, good quality' },
-    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, desc: 'Best quality — 20 steps' },
-    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, desc: 'Creative style, artistic output' },
-    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, desc: 'Good at text in images' },
-    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, desc: 'Fast alternative to Schnell' },
+    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, size: '~23 GB', desc: 'Fast — 4 steps, good quality' },
+    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Best quality — 20 steps' },
+    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Creative style, artistic output' },
+    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Good at text in images' },
+    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, size: '~23 GB', desc: 'Fast alternative to Schnell' },
 ];
 
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
@@ -642,6 +642,7 @@ async function loadImageModels() {
                 <div class="model-card-badges">
                     <span class="badge badge-arch">${active.quality}</span>
                     <span class="badge badge-size">${active.steps} steps</span>
+                    <span class="badge badge-size">${active.size}</span>
                 </div>
             </div>
             <div class="model-card-desc">${active.desc}</div>
@@ -680,6 +681,7 @@ async function loadImageModels() {
                 <div class="model-card-badges">
                     <span class="badge badge-arch">${m.quality}</span>
                     <span class="badge badge-size">${m.steps} steps</span>
+                    <span class="badge badge-size">${m.size}</span>
                 </div>
             </div>
             <div class="model-card-desc">${m.desc}</div>
