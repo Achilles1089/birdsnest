@@ -1106,21 +1106,31 @@ def tool_weather(args: Dict) -> str:
     if not location:
         return "Error: No location provided"
 
-    # wttr.in — free, no API key needed
+    # wttr.in JSON endpoint — free, no API key, no encoding issues
     try:
         import urllib.request
-        url = f"https://wttr.in/{urllib.request.quote(location)}?format=%l:+%C+%t+%h+%w"
+        import urllib.parse
+        import json as _json
+        loc = urllib.parse.quote(location)
+        url = f"https://wttr.in/{loc}?format=j1"
         req = urllib.request.Request(url, headers={"User-Agent": "curl/7.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            result = resp.read().decode("utf-8").strip()
-        
-        # Also get a more detailed forecast
-        url2 = f"https://wttr.in/{urllib.request.quote(location)}?format=%l\\n🌡️+%t+(feels+like+%f)\\n💧+Humidity:+%h\\n💨+Wind:+%w\\n🌅+Sunrise:+%S+|+Sunset:+%s\\n📊+UV+Index:+%u"
-        req2 = urllib.request.Request(url2, headers={"User-Agent": "curl/7.0"})
-        with urllib.request.urlopen(req2, timeout=10) as resp2:
-            detail = resp2.read().decode("utf-8").strip()
+            data = _json.loads(resp.read().decode("utf-8"))
 
-        return f"Weather for {location}:\n\n{detail}"
+        cur = data["current_condition"][0]
+        area = data["nearest_area"][0]
+        city = area["areaName"][0]["value"]
+        region = area["region"][0]["value"]
+
+        return (
+            f"Weather for {city}, {region}\n\n"
+            f"Temperature: {cur['temp_F']}F / {cur['temp_C']}C "
+            f"(feels like {cur['FeelsLikeF']}F / {cur['FeelsLikeC']}C)\n"
+            f"Conditions: {cur['weatherDesc'][0]['value']}\n"
+            f"Humidity: {cur['humidity']}%\n"
+            f"Wind: {cur['windspeedMiles']} mph {cur['winddir16Point']}\n"
+            f"UV Index: {cur['uvIndex']}"
+        )
 
     except Exception as e:
         return f"Weather error: {str(e)}"
