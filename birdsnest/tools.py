@@ -1488,6 +1488,17 @@ def tool_generate_image(args: Dict) -> str:
         "--model", selected_model,
     ]
 
+    # Apply performance settings from server config
+    try:
+        from birdsnest.server import image_quantize, image_low_ram
+        if image_quantize and image_quantize != "none":
+            cmd.extend(["--quantize", str(image_quantize)])
+        if image_low_ram:
+            cmd.append("--low-ram")
+    except ImportError:
+        # Default: int8 quantization if server not reachable
+        cmd.extend(["--quantize", "8"])
+
     try:
         t0 = time.time()
         result = subprocess.run(

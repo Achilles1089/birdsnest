@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettings();
     updateRAGStatus();
     loadTools();
+    loadImageSettings();
     document.getElementById('chatInput').focus();
 });
 
@@ -828,6 +829,48 @@ async function unloadImageModel() {
     }).catch(() => { });
     addSystemMessage('Image model reset to default (Schnell)');
     loadImageModels();
+}
+
+// ── Image Performance Settings ──────────────────────────────────
+async function setImageQuantization(value) {
+    localStorage.setItem('birdsnest_img_quant', value);
+    const label = value === 'none' ? 'Full' : `int${value}`;
+    document.getElementById('imgQuantValue').textContent = label;
+    await fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantize: value, low_ram: document.getElementById('imgLowRamToggle').checked }),
+    }).catch(() => { });
+    addSystemMessage(`Image quantization set to ${label}`);
+}
+
+async function setImageLowRam(enabled) {
+    localStorage.setItem('birdsnest_img_lowram', enabled);
+    const quantVal = document.getElementById('imgQuantSelect').value;
+    await fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantize: quantVal, low_ram: enabled }),
+    }).catch(() => { });
+    addSystemMessage(enabled ? '💾 Low-RAM mode enabled for image generation' : 'Low-RAM mode disabled');
+}
+
+function loadImageSettings() {
+    const quant = localStorage.getItem('birdsnest_img_quant') || '8';
+    const lowRam = localStorage.getItem('birdsnest_img_lowram') === 'true';
+    const select = document.getElementById('imgQuantSelect');
+    if (select) select.value = quant;
+    const label = quant === 'none' ? 'Full' : `int${quant}`;
+    const valEl = document.getElementById('imgQuantValue');
+    if (valEl) valEl.textContent = label;
+    const toggle = document.getElementById('imgLowRamToggle');
+    if (toggle) toggle.checked = lowRam;
+    // Sync with server
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantize: quant, low_ram: lowRam }),
+    }).catch(() => { });
 }
 
 async function unloadMusicModel() {

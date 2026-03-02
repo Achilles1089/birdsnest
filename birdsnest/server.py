@@ -207,6 +207,19 @@ async def delete_image_model(dir_name: str):
     return _delete_hf_model(dir_name)
 
 
+# ── Image performance settings ────────────────────────────────────────────────
+image_quantize = "8"   # Default: int8 quantization
+image_low_ram = False
+
+@app.post("/api/image-settings")
+async def set_image_settings(request: Request):
+    global image_quantize, image_low_ram
+    data = await request.json()
+    image_quantize = data.get("quantize", "8")
+    image_low_ram = data.get("low_ram", False)
+    return {"success": True, "quantize": image_quantize, "low_ram": image_low_ram}
+
+
 # ── REST API: Music Models ───────────────────────────────────────────────────
 
 @app.get("/api/music-models")
