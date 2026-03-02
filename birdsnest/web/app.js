@@ -159,13 +159,13 @@ function connectWebSocket() {
                     if (hasToolResult) {
                         // Tool-only response — save with flag so restoreHistory skips it
                         chatHistory.push({ role: 'assistant', text: '', nickname: currentNickname, isTool: true });
-                    } else {
-                        // Regular model response — save the text
+                    } else if (finalText && finalText.length > 1 && !/^\d+$/.test(finalText)) {
+                        // Regular model response — save the text (skip trivially short or digit-only junk)
                         chatHistory.push({ role: 'assistant', text: finalText, nickname: currentNickname, stats: data.stats });
                     }
                     saveHistory();
 
-                    if (data.stats) {
+                    if (data.stats && data.stats.tokens > 0) {
                         const statsEl = document.createElement('div');
                         statsEl.className = 'message-stats';
                         statsEl.textContent = `${data.stats.tokens} tokens • ${data.stats.tok_s} tok/s • ${data.stats.time}s`;
@@ -680,7 +680,7 @@ function restoreHistory() {
                 addMessage('user', entry.text);
             } else {
                 currentNickname = entry.nickname || 'Bird\'s Nest';
-                if (!entry.text) return; // skip empty entries
+                if (!entry.text || entry.text.length <= 1 || /^\d+$/.test(entry.text)) return; // skip empty/junk entries
                 const el = addMessage('assistant', entry.text);
                 if (entry.stats && el) {
                     const statsEl = document.createElement('div');

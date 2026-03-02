@@ -467,6 +467,8 @@ class RWKVEngine(InferenceEngine):
         all_tokens = []
         import re as _re
         _stop_pattern = _re.compile(r'\n\s*[Uu]ser\s*[:\!\?]?')
+        # Normalize prompt for echo detection
+        _prompt_norm = prompt.lower().strip()
         
         for _ in range(max_tokens):
             token = self._sample(out, temperature, top_p)
@@ -485,6 +487,12 @@ class RWKVEngine(InferenceEngine):
                 break
             if decoded.endswith('\n\n') and len(all_tokens) > 10:
                 break
+
+            # Echo detection — if the model is repeating the user's prompt, stop
+            if len(all_tokens) > 20:
+                gen_norm = decoded.lower().strip()
+                if len(gen_norm) > 20 and _prompt_norm[:30] in gen_norm:
+                    break
 
             # Decode just this token and yield
             try:
