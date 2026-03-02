@@ -1114,7 +1114,7 @@ def tool_weather(args: Dict) -> str:
         loc = urllib.parse.quote(location)
         url = f"https://wttr.in/{loc}?format=j1"
         req = urllib.request.Request(url, headers={"User-Agent": "curl/7.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = _json.loads(resp.read().decode("utf-8"))
 
         cur = data["current_condition"][0]
