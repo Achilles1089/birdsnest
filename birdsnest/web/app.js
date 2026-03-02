@@ -412,10 +412,38 @@ function renderGroupedModels(models, mode) {
                     <span class="arch-label">${cat.label}</span>
                     <span class="arch-type">${cat.type}</span>
                 </div>
-                <div class="arch-desc">${cat.desc}</div>
-                ${items.map(m => renderModelCard(m, mode)).join('')}
-            </div>
-        `;
+                <div class="arch-desc">${cat.desc}</div>`;
+
+        if (arch === 'rwkv') {
+            // Split RWKV into Thinking (G1) and Non-Thinking sub-groups
+            const thinking = items.filter(m => m.thinking).sort((a, b) => a.size_gb - b.size_gb);
+            const nonThinking = items.filter(m => !m.thinking).sort((a, b) => a.size_gb - b.size_gb);
+
+            if (thinking.length > 0) {
+                html += `
+                    <details class="model-subgroup" open>
+                        <summary class="subgroup-header">🧠 Thinking Models <span class="subgroup-count">${thinking.length}</span></summary>
+                        <div class="subgroup-content">
+                            ${thinking.map(m => renderModelCard(m, mode)).join('')}
+                        </div>
+                    </details>`;
+            }
+            if (nonThinking.length > 0) {
+                html += `
+                    <details class="model-subgroup">
+                        <summary class="subgroup-header">💬 Chat Models <span class="subgroup-count">${nonThinking.length}</span></summary>
+                        <div class="subgroup-content">
+                            ${nonThinking.map(m => renderModelCard(m, mode)).join('')}
+                        </div>
+                    </details>`;
+            }
+        } else {
+            // Non-RWKV architectures — render flat, sorted by size
+            const sorted = items.sort((a, b) => a.size_gb - b.size_gb);
+            html += sorted.map(m => renderModelCard(m, mode)).join('');
+        }
+
+        html += `</div>`;
     }
     return html;
 }

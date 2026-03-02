@@ -881,6 +881,57 @@ main {
     margin-bottom: 0;
 }
 
+/* ── RWKV Sub-groups (Thinking / Chat) ──────────── */
+.model-subgroup {
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.subgroup-header {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    list-style: none;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subgroup-header::-webkit-details-marker {
+    display: none;
+}
+
+.subgroup-header::after {
+    content: '▶';
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-left: auto;
+    transition: transform 0.2s;
+}
+
+.model-subgroup[open] .subgroup-header::after {
+    transform: rotate(90deg);
+}
+
+.subgroup-count {
+    font-size: 11px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.subgroup-content {
+    padding: 4px 8px 8px;
+}
+
 /* ── Toggle Switch ───────────────────────────────── */
 
 .toggle-switch {
