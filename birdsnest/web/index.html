@@ -323,33 +323,46 @@
         <div class="panel-header">
             <h2>Settings</h2>
         </div>
-        <div class="setting-row">
-            <label>Temperature</label>
-            <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0">
-            <span id="tempValue">1.0</span>
-        </div>
-        <div class="setting-row">
-            <label>Top-P</label>
-            <input type="range" id="topP" min="0.1" max="1.0" step="0.05" value="0.7">
-            <span id="topPValue">0.7</span>
-        </div>
-        <div class="setting-row">
-            <label>Max Tokens</label>
-            <input type="range" id="maxTokens" min="50" max="2000" step="50" value="500">
-            <span id="maxTokensValue">500</span>
+
+        <div class="settings-section">
+            <h3>Generation</h3>
+            <div class="setting-block">
+                <div class="setting-label-row">
+                    <label>Temperature</label>
+                    <span class="setting-value" id="tempValue">1.0</span>
+                </div>
+                <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0">
+                <small class="setting-hint">Higher = more creative, lower = more focused</small>
+            </div>
+            <div class="setting-block">
+                <div class="setting-label-row">
+                    <label>Top-P</label>
+                    <span class="setting-value" id="topPValue">0.7</span>
+                </div>
+                <input type="range" id="topP" min="0.1" max="1.0" step="0.05" value="0.7">
+                <small class="setting-hint">Nucleus sampling — lower = more predictable</small>
+            </div>
+            <div class="setting-block">
+                <div class="setting-label-row">
+                    <label>Max Tokens</label>
+                    <span class="setting-value" id="maxTokensValue">500</span>
+                </div>
+                <input type="range" id="maxTokens" min="50" max="2000" step="50" value="500">
+                <small class="setting-hint">Maximum response length in tokens</small>
+            </div>
         </div>
 
-        <div class="panel-header" style="margin-top: 16px;">
+        <div class="settings-section">
             <h3>Tools</h3>
+            <div class="setting-row">
+                <label>Enable tool calling</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="toolsToggle" checked onchange="toggleTools(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div id="toolsList" class="tools-grid"></div>
         </div>
-        <div class="setting-row">
-            <label>Enable tool calling</label>
-            <label class="toggle-switch">
-                <input type="checkbox" id="toolsToggle" checked onchange="toggleTools(this.checked)">
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-        <div id="toolsList" class="tools-list"></div>
 
     </div>
 

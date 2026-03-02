@@ -1356,6 +1356,29 @@ async function toggleSingleTool(name, enabled) {
     } catch { }
 }
 
+const TOOL_DISPLAY_NAMES = {
+    get_current_time: { label: 'Clock & Time', icon: '🕐' },
+    calculate: { label: 'Calculator', icon: '🧮' },
+    get_system_info: { label: 'System Info', icon: '💻' },
+    search_web: { label: 'Web Search', icon: '🔍' },
+    fetch_url: { label: 'Read Webpage', icon: '🌐' },
+    read_file: { label: 'Read File', icon: '📄' },
+    write_file: { label: 'Write File', icon: '✏️' },
+    run_python: { label: 'Run Python', icon: '🐍' },
+    list_directory: { label: 'Browse Files', icon: '📁' },
+    run_shell: { label: 'Terminal', icon: '💲' },
+    youtube_transcript: { label: 'YouTube', icon: '📺' },
+    memory: { label: 'Memory', icon: '🧠' },
+    weather: { label: 'Weather', icon: '🌤️' },
+    clipboard: { label: 'Clipboard', icon: '📋' },
+    screenshot: { label: 'Screenshot', icon: '📸' },
+    todo: { label: 'Task List', icon: '✅' },
+    translate: { label: 'Translate', icon: '🌍' },
+    generate_image: { label: 'Image Gen', icon: '🎨' },
+    query_database: { label: 'Database', icon: '🗄️' },
+    generate_music: { label: 'Music Gen', icon: '🎵' },
+};
+
 async function loadTools() {
     try {
         const res = await fetch('/api/tools');
@@ -1371,17 +1394,20 @@ async function loadTools() {
             return;
         }
 
-        list.innerHTML = data.tools.map(t => `
-            <div class="setting-row" style="padding: 4px 0;">
-                <label style="font-size:12px;" title="${t.description}">
-                    <span style="margin-right:4px;">🔧</span>${t.name}
-                </label>
-                <label class="toggle-switch" style="transform: scale(0.8);">
-                    <input type="checkbox" ${t.enabled ? 'checked' : ''} onchange="toggleSingleTool('${t.name}', this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        `).join('');
+        list.innerHTML = data.tools.map(t => {
+            const display = TOOL_DISPLAY_NAMES[t.name] || { label: t.name, icon: '🔧' };
+            return `
+                <div class="tool-card" title="${t.description}">
+                    <div class="tool-card-top">
+                        <span class="tool-icon">${display.icon}</span>
+                        <span class="tool-label">${display.label}</span>
+                    </div>
+                    <label class="toggle-switch toggle-sm">
+                        <input type="checkbox" ${t.enabled ? 'checked' : ''} onchange="toggleSingleTool('${t.name}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>`;
+        }).join('');
 
         // Update sidebar count
         const countEl = document.getElementById('toolCount');

@@ -535,22 +535,62 @@ header h1 {
 
 /* ── Settings ────────────────────────────────────── */
 
+.settings-section {
+    margin-bottom: 20px;
+}
+
+.settings-section h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+
 .setting-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .setting-row label {
     font-size: 13px;
     color: var(--text-secondary);
-    width: 100px;
-    flex-shrink: 0;
 }
 
-.setting-row input[type="range"] {
-    flex: 1;
+/* ── Slider Blocks (vertical layout) ───────────── */
+.setting-block {
+    margin-bottom: 18px;
+}
+
+.setting-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.setting-label-row label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.setting-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+    text-align: right;
+}
+
+.setting-block input[type="range"] {
+    width: 100%;
     appearance: none;
     height: 4px;
     background: var(--bg-hover);
@@ -558,7 +598,7 @@ header h1 {
     outline: none;
 }
 
-.setting-row input[type="range"]::-webkit-slider-thumb {
+.setting-block input[type="range"]::-webkit-slider-thumb {
     appearance: none;
     width: 16px;
     height: 16px;
@@ -567,12 +607,62 @@ header h1 {
     cursor: pointer;
 }
 
-.setting-row span {
-    font-size: 13px;
+.setting-hint {
+    display: block;
+    font-size: 11px;
     color: var(--text-muted);
-    width: 40px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+/* ── Tools Grid (2-column) ─────────────────────── */
+.tools-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.tool-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: default;
+    transition: background 0.15s;
+}
+
+.tool-card:hover {
+    background: var(--bg-hover);
+}
+
+.tool-card-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.tool-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tool-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Small toggle variant for tool cards */
+.toggle-sm {
+    transform: scale(0.7);
+    flex-shrink: 0;
 }
 
 /* ── Chat ────────────────────────────────────────── */
