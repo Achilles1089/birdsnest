@@ -645,6 +645,9 @@ async function loadImageModels() {
                 </div>
             </div>
             <div class="model-card-desc">${active.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-danger" onclick="unloadImageModel()">Unload</button>
+            </div>
         </div>
     `;
     document.getElementById('activeImageModel').className = '';
@@ -690,13 +693,44 @@ async function loadImageModels() {
 async function selectImageModel(id) {
     activeImageModel = id;
     localStorage.setItem('birdsnest_image_model', id);
-    // Notify server so tools.py picks it up
     await fetch('/api/image-models/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: id }),
     });
+    addSystemMessage(`Image model set to ${id}`);
     loadImageModels();
+}
+
+async function unloadImageModel() {
+    activeImageModel = 'schnell';
+    localStorage.removeItem('birdsnest_image_model');
+    await fetch('/api/image-models/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'schnell' }),
+    }).catch(() => { });
+    addSystemMessage('Image model reset to default (Schnell)');
+    loadImageModels();
+}
+
+async function unloadMusicModel() {
+    activeMusicModel = 'small';
+    localStorage.removeItem('birdsnest_music_model');
+    await fetch('/api/music-models/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'small' }),
+    }).catch(() => { });
+    addSystemMessage('Music model reset to default (Small)');
+    loadMusicModels();
+}
+
+function unloadEmbedModel() {
+    activeEmbedModel = 'tfidf';
+    localStorage.removeItem('birdsnest_embed_model');
+    addSystemMessage('Embed model reset to default (TF-IDF)');
+    loadEmbeddingModels();
 }
 
 // ── Unified HF Model Delete ─────────────────────────
@@ -859,6 +893,9 @@ async function loadMusicModels() {
                 </div>
             </div>
             <div class="model-card-desc">${active.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-danger" onclick="unloadMusicModel()">Unload</button>
+            </div>
         </div>
     `;
     document.getElementById('activeMusicModel').className = '';
@@ -947,6 +984,9 @@ async function loadEmbeddingModels() {
                 </div>
             </div>
             <div class="model-card-desc">${active.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-danger" onclick="unloadEmbedModel()">Unload</button>
+            </div>
         </div>
     `;
     document.getElementById('activeEmbedModel').className = '';
