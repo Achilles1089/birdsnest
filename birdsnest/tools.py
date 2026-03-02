@@ -284,6 +284,19 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
             if expr:
                 return ('calculate', {'expression': expr})
 
+    # ── Image Search queries ──
+    img_search_patterns = [
+        (r'(?:show|find|search|get|look up) (?:me )?(?:pictures?|photos?|images?) (?:of |about |for |showing )?(.+)', 1),
+        (r'(?:search|find|look) for images? (?:of |about )?(.+)', 1),
+        (r'(?:image|picture|photo) search (?:for )?(.+)', 1),
+    ]
+    for pattern, group in img_search_patterns:
+        m = re.search(pattern, msg)
+        if m and 'search_images' in _tools and _tools['search_images'].enabled:
+            query = m.group(group).strip().rstrip('.')
+            if query and len(query) > 2:
+                return ('search_images', {'query': query})
+
     # ── Search queries ──
     search_patterns = [
         (r'search (?:for |the web for |google for |the internet for )?(.+)', 1),
@@ -621,6 +634,96 @@ def tool_search_web(args: Dict) -> str:
 
     except Exception as e:
         return f"Search error: {str(e)}"
+
+
+@register_tool(
+    "search_images",
+    "Search for images on the web using DuckDuckGo",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Image search query"}
+        },
+        "required": ["query"],
+    },
+)
+def tool_search_images(args: Dict) -> str:
+    query = args.get("query") or args.get("input", "")
+    if not query:
+        return "Error: No search query provided"
+
+    import urllib.request
+    import urllib.parse
+    import json as _json
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) BirdsNest/1.0"
+    }
+
+    try:
+        # Step 1: Get VQD token from DDG
+        vqd_url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}"
+        req = urllib.request.Request(vqd_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            page = resp.read().decode("utf-8", errors="replace")
+
+        # Extract vqd token
+        import re
+        vqd_match = re.search(r'vqd="([^"]+)"', page) or re.search(r'vqd=([^&"]+)', page)
+        if not vqd_match:
+            # Fallback: try the vqd endpoint
+            vqd_api = f"https://duckduckgo.com/vqd.js?q={urllib.parse.quote(query)}"
+            req2 = urllib.request.Request(vqd_api, headers=headers)
+            with urllib.request.urlopen(req2, timeout=10) as resp2:
+                vqd_text = resp2.read().decode("utf-8", errors="replace")
+            vqd_match = re.search(r'vqd="([^"]+)"', vqd_text) or re.search(r'vqd=([^&"\s]+)', vqd_text)
+
+        if not vqd_match:
+            return f"Could not initialize image search for: {query}"
+
+        vqd = vqd_match.group(1)
+
+        # Step 2: Query the image API
+        img_url = (
+            f"https://duckduckgo.com/i.js"
+            f"?l=us-en&o=json&q={urllib.parse.quote(query)}"
+            f"&vqd={vqd}&f=,,,,,&p=1"
+        )
+        req3 = urllib.request.Request(img_url, headers={
+            **headers,
+            "Referer": "https://duckduckgo.com/",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req3, timeout=10) as resp3:
+            data = _json.loads(resp3.read().decode("utf-8", errors="replace"))
+
+        results = data.get("results", [])
+        if not results:
+            return f"No images found for: {query}"
+
+        # Take top 8 images
+        images = []
+        for r in results[:8]:
+            images.append({
+                "title": r.get("title", "")[:80],
+                "image": r.get("image", ""),        # Full-size URL
+                "thumbnail": r.get("thumbnail", ""), # Thumbnail URL
+                "source": r.get("source", ""),       # Source domain
+                "url": r.get("url", ""),             # Source page URL
+                "width": r.get("width", 0),
+                "height": r.get("height", 0),
+            })
+
+        # Return as structured JSON for the frontend to render
+        return _json.dumps({
+            "type": "image_results",
+            "query": query,
+            "count": len(images),
+            "images": images,
+        })
+
+    except Exception as e:
+        return f"Image search error: {str(e)}"
 
 
 @register_tool(

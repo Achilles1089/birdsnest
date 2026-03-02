@@ -254,6 +254,22 @@ function connectWebSocket() {
                         </div>`;
                     }
 
+                    // Check if result is image search results (structured JSON)
+                    let isImageGrid = false;
+                    try {
+                        const parsed = JSON.parse(data.result);
+                        if (parsed.type === 'image_results' && parsed.images) {
+                            isImageGrid = true;
+                            const gridHtml = renderImageGrid(parsed);
+                            resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🖼️</span> Image search: ${parsed.query}</div>${gridHtml}`;
+                            textEl.appendChild(resultEl);
+                            textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
+                            scrollToBottom();
+                            setStatus('Generating...', 'yellow');
+                            break;
+                        }
+                    } catch (e) { /* Not JSON, continue with normal rendering */ }
+
                     // Linkify URLs in the result text
                     const linkified = (data.result || '').replace(
                         /(https?:\/\/[^\s<]+)/g,
@@ -301,6 +317,24 @@ function addMessage(role, text, streaming = false) {
     messages.appendChild(el);
     scrollToBottom();
     return el;
+}
+
+// ── Image Search Grid ─────────────────────────────────────────
+function renderImageGrid(data) {
+    const cards = data.images.map(img => {
+        const thumb = img.thumbnail || img.image;
+        const title = (img.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const source = (img.source || '').replace(/</g, '&lt;');
+        return `<a class="image-search-card" href="${img.image}" target="_blank" rel="noopener" title="${title}">
+            <img src="${thumb}" alt="${title}" loading="lazy" onerror="this.closest('.image-search-card').style.display='none'">
+            <div class="image-search-overlay">
+                <span class="image-search-title">${title}</span>
+                <span class="image-search-source">${source}</span>
+            </div>
+        </a>`;
+    }).join('');
+    return `<div class="image-search-grid">${cards}</div>
+            <div class="image-search-meta">${data.count} images found for "${data.query}"</div>`;
 }
 
 function addSystemMessage(text, type = 'info') {
@@ -1418,6 +1452,7 @@ const TOOL_DISPLAY_NAMES = {
     todo: { label: 'Task List', icon: '✅' },
     translate: { label: 'Translate', icon: '🌍' },
     generate_image: { label: 'Image Gen', icon: '🎨' },
+    search_images: { label: 'Image Search', icon: '🖼️' },
     query_database: { label: 'Database', icon: '🗄️' },
     generate_music: { label: 'Music Gen', icon: '🎵' },
 };
