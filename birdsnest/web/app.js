@@ -291,21 +291,12 @@ function connectWebSocket() {
                         </div>`;
                     }
 
-                    // Check if result is structured JSON (image search or web search)
+                    // Check if result is structured JSON (image search)
                     try {
                         const parsed = JSON.parse(data.result);
                         if (parsed.type === 'image_results' && parsed.images) {
                             const gridHtml = renderImageGrid(parsed);
                             resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🖼️</span> Image search: ${parsed.query}</div>${gridHtml}`;
-                            textEl.appendChild(resultEl);
-                            textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
-                            scrollToBottom();
-                            setStatus('Generating...', 'yellow');
-                            break;
-                        }
-                        if (parsed.type === 'search_results' && parsed.results) {
-                            const cardsHtml = renderSearchCards(parsed);
-                            resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🔍</span> Search: ${parsed.query}</div>${cardsHtml}`;
                             textEl.appendChild(resultEl);
                             textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                             scrollToBottom();

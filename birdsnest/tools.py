@@ -623,26 +623,14 @@ def tool_search_web(args: Dict) -> str:
             if len(unique) >= 5:
                 break
 
-        import json as _json
-        from urllib.parse import urlparse
-
-        results = []
-        for r in unique:
-            domain = urlparse(r["url"]).netloc or ""
-            results.append({
-                "title": r["title"],
-                "url": r["url"],
-                "snippet": (r.get("snippet") or "")[:200],
-                "domain": domain,
-                "favicon": f"https://www.google.com/s2/favicons?domain={domain}&sz=32" if domain else "",
-            })
-
-        return _json.dumps({
-            "type": "search_results",
-            "query": query,
-            "count": len(results),
-            "results": results,
-        })
+        output = f"Search results for: {query}\n\n"
+        for i, r in enumerate(unique, 1):
+            output += f"{i}. {r['title']}\n"
+            output += f"   {r['url']}\n"
+            if r['snippet']:
+                output += f"   {r['snippet'][:120]}\n"
+            output += "\n"
+        return output
 
     except Exception as e:
         return f"Search error: {str(e)}"
