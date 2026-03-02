@@ -1274,60 +1274,56 @@ def tool_translate(args: Dict) -> str:
     if not text or not to_lang:
         return "Error: 'text' and 'to' (target language) are required"
 
-    # Try argostranslate (offline)
+    # Map common names to ISO codes
+    lang_map = {
+        "english": "en", "spanish": "es", "french": "fr", "german": "de",
+        "italian": "it", "portuguese": "pt", "russian": "ru", "chinese": "zh",
+        "japanese": "ja", "korean": "ko", "arabic": "ar", "hindi": "hi",
+        "dutch": "nl", "turkish": "tr", "polish": "pl", "swedish": "sv",
+    }
+    to_code = lang_map.get(to_lang.lower(), to_lang.lower())
+    from_lang = args.get("from_lang", "en")
+    from_code = lang_map.get(from_lang.lower(), from_lang.lower())
+
+    # ── Primary: CTranslate2 + Opus-MT (fully local) ──
     try:
-        import argostranslate.translate
-        installed = argostranslate.translate.get_installed_languages()
-        
-        # Find source and target
-        from_lang = args.get("from_lang", "en")
-        
-        # Map common names to codes
-        lang_map = {
-            "english": "en", "spanish": "es", "french": "fr", "german": "de",
-            "italian": "it", "portuguese": "pt", "russian": "ru", "chinese": "zh",
-            "japanese": "ja", "korean": "ko", "arabic": "ar", "hindi": "hi",
-        }
-        to_code = lang_map.get(to_lang.lower(), to_lang.lower())
-        from_code = lang_map.get(from_lang.lower(), from_lang.lower())
+        from transformers import MarianMTModel, MarianTokenizer
 
-        src = next((l for l in installed if l.code == from_code), None)
-        tgt = next((l for l in installed if l.code == to_code), None)
+        hf_model = f"Helsinki-NLP/opus-mt-{from_code}-{to_code}"
 
-        if src and tgt:
-            translation = src.get_translation(tgt)
-            if translation:
-                result = translation.translate(text)
-                return f"Translation ({from_code} → {to_code}):\n\n{result}"
+        # Load tokenizer + model (cached by HuggingFace after first download ~300MB)
+        tokenizer = MarianTokenizer.from_pretrained(hf_model)
+        model = MarianMTModel.from_pretrained(hf_model)
 
-        return f"Language pair not installed: {from_code} → {to_code}. Install with: pip install argostranslate"
+        # Translate locally
+        inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+        translated = model.generate(**inputs)
+        result = tokenizer.decode(translated[0], skip_special_tokens=True)
 
-    except ImportError:
+        return f"🔒 Translation ({from_code} → {to_code}, local):\n\n{result}"
+
+    except Exception:
         pass
 
-    # Fallback: try `trans` CLI (translate-shell)
+    # ── Fallback: translate-shell (uses Google — NOT local) ──
     try:
-        to_code_map = {
-            "english": "en", "spanish": "es", "french": "fr", "german": "de",
-            "italian": "it", "portuguese": "pt", "russian": "ru", "chinese": "zh-CN",
-            "japanese": "ja", "korean": "ko", "arabic": "ar",
-        }
-        to_code = to_code_map.get(to_lang.lower(), to_lang.lower())
+        to_code_cli = {
+            "chinese": "zh-CN", "japanese": "ja", "korean": "ko",
+        }.get(to_lang.lower(), to_code)
 
         result = subprocess.run(
-            ["trans", "-b", f":{to_code}", text],
+            ["trans", "-b", f":{to_code_cli}", text],
             capture_output=True, text=True, timeout=10
         )
         if result.stdout.strip():
-            return f"Translation (→ {to_lang}):\n\n{result.stdout.strip()}"
-        return f"Translation failed. Install: brew install translate-shell"
+            return f"⚠️ Translation (→ {to_lang}, via Google — not local):\n\n{result.stdout.strip()}\n\n(Local Opus-MT model not available for {from_code}→{to_code})"
+        return f"Translation failed."
 
     except FileNotFoundError:
         return (
             f"No translation backend available.\n"
-            f"Install one of:\n"
-            f"  • pip install argostranslate (offline)\n"
-            f"  • brew install translate-shell (online)"
+            f"Local model not found for {from_code}→{to_code}.\n"
+            f"Install translate-shell as fallback: brew install translate-shell"
         )
     except Exception as e:
         return f"Translation error: {str(e)}"
