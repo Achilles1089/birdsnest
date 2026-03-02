@@ -373,6 +373,7 @@ function renderGroupedModels(models, mode) {
 function renderModelCard(m, mode) {
     const name = m.display_name || m.name;
     const desc = m.description || '';
+    const thinkBadge = m.thinking ? '<span class="badge badge-think">🧠 Thinking</span>' : '';
 
     if (mode === 'local') {
         return `
@@ -380,6 +381,7 @@ function renderModelCard(m, mode) {
                 <div class="model-card-header">
                     <span class="model-card-name">${name}</span>
                     <span class="badge badge-size">${m.size_gb} GB</span>
+                    ${thinkBadge}
                 </div>
                 ${desc ? `<div class="model-card-desc">${desc}</div>` : ''}
                 <div class="model-card-actions">
@@ -393,6 +395,7 @@ function renderModelCard(m, mode) {
                 <div class="model-card-header">
                     <span class="model-card-name">${name}</span>
                     <span class="badge badge-size">${m.size_gb} GB</span>
+                    ${thinkBadge}
                 </div>
                 ${desc ? `<div class="model-card-desc">${desc}</div>` : ''}
                 <div class="model-card-actions">

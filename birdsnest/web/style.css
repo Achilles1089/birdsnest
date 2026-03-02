@@ -422,6 +422,12 @@ header h1 {
     color: var(--text-secondary);
 }
 
+.badge-think {
+    background: rgba(34, 211, 238, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
 .model-card-desc {
     font-size: 12px;
     color: var(--text-muted);
