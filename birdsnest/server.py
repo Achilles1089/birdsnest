@@ -365,7 +365,9 @@ async def websocket_chat(websocket: WebSocket):
                         "args": tool_args,
                     })
 
-                    result = execute_tool(tool_name, tool_args)
+                    # Run in thread pool so WebSocket messages flush before blocking
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, execute_tool, tool_name, tool_args)
                     await websocket.send_json({
                         "type": "tool_result",
                         "name": tool_name,
