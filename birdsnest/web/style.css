@@ -259,6 +259,54 @@ header h1 {
     left: 0;
 }
 
+/* ── Model Library Tabs ──────────────────────────── */
+.model-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 0 12px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 2;
+}
+
+.model-tab {
+    flex: 1;
+    padding: 6px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.model-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.model-tab.active {
+    color: #8b9cf7;
+    background: rgba(139, 156, 247, 0.08);
+    border-color: rgba(139, 156, 247, 0.2);
+    box-shadow: 0 0 8px rgba(139, 156, 247, 0.1);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
 .panel-header {
     display: flex;
     justify-content: space-between;

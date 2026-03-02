@@ -180,19 +180,67 @@
             <span class="disk-usage" id="diskUsage"></span>
         </div>
 
-        <div class="panel-section">
-            <h3>Loaded</h3>
-            <div id="loadedModelSection" class="empty-state">No model loaded</div>
+        <!-- Tab Bar -->
+        <div class="model-tabs">
+            <button class="model-tab active" data-tab="ai" onclick="switchModelTab('ai')">🤖 AI</button>
+            <button class="model-tab" data-tab="image" onclick="switchModelTab('image')">🎨 Image</button>
+            <button class="model-tab" data-tab="translation" onclick="switchModelTab('translation')">🌐 Lang</button>
+            <button class="model-tab" data-tab="music" onclick="switchModelTab('music')">🎵 Music</button>
+            <button class="model-tab" data-tab="embed" onclick="switchModelTab('embed')">📎 Embed</button>
         </div>
 
-        <div class="panel-section">
-            <h3>Downloaded</h3>
-            <div id="localModelsList" class="model-list"></div>
+        <!-- AI Models Tab (existing) -->
+        <div class="tab-content active" id="tabAi">
+            <div class="panel-section">
+                <h3>Loaded</h3>
+                <div id="loadedModelSection" class="empty-state">No model loaded</div>
+            </div>
+            <div class="panel-section">
+                <h3>Downloaded</h3>
+                <div id="localModelsList" class="model-list"></div>
+            </div>
+            <div class="panel-section">
+                <h3>Available to Download</h3>
+                <div id="catalogModelsList" class="model-list"></div>
+            </div>
         </div>
 
-        <div class="panel-section">
-            <h3>Available to Download</h3>
-            <div id="catalogModelsList" class="model-list"></div>
+        <!-- Image Models Tab -->
+        <div class="tab-content" id="tabImage">
+            <div class="panel-section">
+                <h3>Active Model</h3>
+                <div id="activeImageModel" class="empty-state">Flux Schnell (default)</div>
+            </div>
+            <div class="panel-section">
+                <h3>Available</h3>
+                <div id="imageModelsList" class="model-list"></div>
+            </div>
+        </div>
+
+        <!-- Translation Models Tab -->
+        <div class="tab-content" id="tabTranslation">
+            <div class="panel-section">
+                <h3>Installed Pairs</h3>
+                <div id="installedTranslations" class="model-list"></div>
+            </div>
+            <div class="panel-section">
+                <h3>Available to Download</h3>
+                <div id="availableTranslations" class="model-list"></div>
+            </div>
+        </div>
+
+        <!-- Music Models Tab -->
+        <div class="tab-content" id="tabMusic">
+            <div class="panel-section">
+                <div class="empty-state">🎵 Coming soon — MusicGen models</div>
+            </div>
+        </div>
+
+        <!-- Embeddings Tab -->
+        <div class="tab-content" id="tabEmbed">
+            <div class="panel-section">
+                <div class="empty-state">📎 Coming soon — Embedding models for RAG</div>
+            </div>
         </div>
 
     </div>

@@ -1400,6 +1400,17 @@ def tool_generate_image(args: Dict) -> str:
             "First run will download the Flux model (~12GB)."
         )
 
+    # Read active image model from config
+    model_config_path = WORKSPACE_DIR / ".birdsnest_image_model"
+    selected_model = "schnell"
+    if model_config_path.exists():
+        selected_model = model_config_path.read_text().strip() or "schnell"
+
+    # Auto-adjust steps for high-quality models
+    fast_models = {"schnell", "z-image-turbo"}
+    if selected_model not in fast_models and steps <= 4:
+        steps = 20  # Dev/Krea/Qwen need more steps
+
     # Build the mflux command
     cmd = [
         "mflux-generate",
@@ -1408,7 +1419,7 @@ def tool_generate_image(args: Dict) -> str:
         "--steps", str(steps),
         "--width", str(width),
         "--height", str(height),
-        "--model", "schnell",  # Fast model (4 steps)
+        "--model", selected_model,
     ]
 
     try:

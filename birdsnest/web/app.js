@@ -574,6 +574,167 @@ function toggleModelPanel() {
     overlay.classList.toggle('active', panel.classList.contains('active'));
     if (panel.classList.contains('active')) {
         loadModels();
+        loadImageModels();
+        loadTranslationModels();
+    }
+}
+
+// ── Tab Switching ─────────────────────────────────────
+function switchModelTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.model-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.model-tab[data-tab="${tab}"]`).classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const tabId = 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1);
+    document.getElementById(tabId).classList.add('active');
+}
+
+// ── Image Models (mflux) ──────────────────────────────
+const IMAGE_MODEL_CATALOG = [
+    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, desc: 'Fast — 4 steps, good quality' },
+    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, desc: 'Best quality — 20 steps' },
+    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, desc: 'Creative style, artistic output' },
+    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, desc: 'Good at text in images' },
+    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, desc: 'Fast alternative to Schnell' },
+];
+
+let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
+
+function loadImageModels() {
+    // Active model display
+    const active = IMAGE_MODEL_CATALOG.find(m => m.id === activeImageModel) || IMAGE_MODEL_CATALOG[0];
+    document.getElementById('activeImageModel').innerHTML = `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${active.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${active.quality}</span>
+                    <span class="badge badge-size">${active.steps} steps</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${active.desc}</div>
+        </div>
+    `;
+    document.getElementById('activeImageModel').className = '';
+
+    // Available models list
+    const list = document.getElementById('imageModelsList');
+    const others = IMAGE_MODEL_CATALOG.filter(m => m.id !== activeImageModel);
+    if (others.length === 0) {
+        list.innerHTML = '<div class="empty-state">All models selected</div>';
+        return;
+    }
+    list.innerHTML = others.map(m => `
+        <div class="model-card">
+            <div class="model-card-header">
+                <span class="model-card-name">${m.name}</span>
+                <div class="model-card-badges">
+                    <span class="badge badge-arch">${m.quality}</span>
+                    <span class="badge badge-size">${m.steps} steps</span>
+                </div>
+            </div>
+            <div class="model-card-desc">${m.desc}</div>
+            <div class="model-card-actions">
+                <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function selectImageModel(id) {
+    activeImageModel = id;
+    localStorage.setItem('birdsnest_image_model', id);
+    // Notify server so tools.py picks it up
+    await fetch('/api/image-models/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: id }),
+    });
+    loadImageModels();
+}
+
+// ── Translation Models (Opus-MT) ──────────────────────
+const TRANSLATION_CATALOG = [
+    { pair: 'en-es', from: 'English', to: 'Spanish', flag: '🇪🇸' },
+    { pair: 'en-fr', from: 'English', to: 'French', flag: '🇫🇷' },
+    { pair: 'en-de', from: 'English', to: 'German', flag: '🇩🇪' },
+    { pair: 'en-it', from: 'English', to: 'Italian', flag: '🇮🇹' },
+    { pair: 'en-pt', from: 'English', to: 'Portuguese', flag: '🇵🇹' },
+    { pair: 'en-ru', from: 'English', to: 'Russian', flag: '🇷🇺' },
+    { pair: 'en-zh', from: 'English', to: 'Chinese', flag: '🇨🇳' },
+    { pair: 'en-ja', from: 'English', to: 'Japanese', flag: '🇯🇵' },
+    { pair: 'en-ko', from: 'English', to: 'Korean', flag: '🇰🇷' },
+    { pair: 'en-ar', from: 'English', to: 'Arabic', flag: '🇸🇦' },
+    { pair: 'en-nl', from: 'English', to: 'Dutch', flag: '🇳🇱' },
+    { pair: 'en-tr', from: 'English', to: 'Turkish', flag: '🇹🇷' },
+    { pair: 'en-pl', from: 'English', to: 'Polish', flag: '🇵🇱' },
+    { pair: 'en-sv', from: 'English', to: 'Swedish', flag: '🇸🇪' },
+    { pair: 'en-hi', from: 'English', to: 'Hindi', flag: '🇮🇳' },
+    { pair: 'es-en', from: 'Spanish', to: 'English', flag: '🇬🇧' },
+];
+
+async function loadTranslationModels() {
+    try {
+        const res = await fetch('/api/translation-models');
+        const data = await res.json();
+        const installed = new Set(data.installed || []);
+
+        const installedList = document.getElementById('installedTranslations');
+        const availableList = document.getElementById('availableTranslations');
+
+        const installedPairs = TRANSLATION_CATALOG.filter(m => installed.has(m.pair));
+        const availablePairs = TRANSLATION_CATALOG.filter(m => !installed.has(m.pair));
+
+        installedList.innerHTML = installedPairs.length > 0
+            ? installedPairs.map(m => `
+                <div class="model-card">
+                    <div class="model-card-header">
+                        <span class="model-card-name">${m.flag} ${m.from} → ${m.to}</span>
+                        <span class="badge badge-size" style="color:#4ade80">Installed</span>
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="empty-state">No translation pairs installed yet</div>';
+
+        availableList.innerHTML = availablePairs.map(m => `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${m.flag} ${m.from} → ${m.to}</span>
+                    <span class="badge badge-size">~300 MB</span>
+                </div>
+                <div class="model-card-actions">
+                    <button class="btn btn-download" onclick="downloadTranslationModel('${m.pair}', this)">
+                        Download
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+    } catch {
+        document.getElementById('installedTranslations').innerHTML =
+            '<div class="empty-state">Translation API loading...</div>';
+    }
+}
+
+async function downloadTranslationModel(pair, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+    try {
+        const res = await fetch('/api/translation-models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pair }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            loadTranslationModels();
+        } else {
+            btn.textContent = 'Error';
+        }
+    } catch {
+        btn.textContent = 'Error';
     }
 }
 

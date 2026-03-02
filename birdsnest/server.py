@@ -131,6 +131,65 @@ async def system_stats():
         "loaded": active_engine.model_name if active_engine and active_engine.is_loaded else None,
     }
 
+# ── REST API: Image Models ───────────────────────────────────────────────────
+
+active_image_model = "schnell"
+
+@app.post("/api/image-models/select")
+async def select_image_model(request: Request):
+    global active_image_model
+    data = await request.json()
+    active_image_model = data.get("model", "schnell")
+    # Write to workspace so tools.py can read it
+    from pathlib import Path
+    config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(active_image_model)
+    return {"success": True, "model": active_image_model}
+
+
+# ── REST API: Translation Models ─────────────────────────────────────────────
+
+@app.get("/api/translation-models")
+async def list_translation_models():
+    """Check which Opus-MT translation models are cached locally."""
+    import pathlib
+    cache_dir = pathlib.Path.home() / ".cache" / "huggingface" / "hub"
+    installed = []
+    if cache_dir.exists():
+        for d in cache_dir.iterdir():
+            if d.name.startswith("models--Helsinki-NLP--opus-mt-"):
+                # Extract language pair from dir name
+                pair = d.name.replace("models--Helsinki-NLP--opus-mt-", "").replace("--", "-")
+                installed.append(pair)
+    return {"installed": installed}
+
+
+@app.post("/api/translation-models/download")
+async def download_translation_model(request: Request):
+    """Pre-download an Opus-MT translation model."""
+    data = await request.json()
+    pair = data.get("pair", "")
+    if not pair:
+        return {"success": False, "error": "No language pair specified"}
+
+    try:
+        import asyncio
+        loop = asyncio.get_running_loop()
+
+        def _download():
+            from transformers import MarianMTModel, MarianTokenizer
+            model_name = f"Helsinki-NLP/opus-mt-{pair}"
+            MarianTokenizer.from_pretrained(model_name)
+            MarianMTModel.from_pretrained(model_name)
+            return True
+
+        await loop.run_in_executor(None, _download)
+        return {"success": True, "pair": pair}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ── REST API: Models ────────────────────────────────────────────────────────
 
 @app.get("/api/models")
