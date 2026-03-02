@@ -11,6 +11,7 @@
 import re
 import json
 import math
+import time
 import platform
 import subprocess
 import psutil
@@ -302,6 +303,52 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
     if any(p in msg for p in sys_patterns):
         if 'get_system_info' in _tools and _tools['get_system_info'].enabled:
             return ('get_system_info', {})
+
+    # ── Shell commands ──
+    shell_patterns = [
+        (r'^run (?:command |shell )?(.+)', 1),
+        (r'^execute (.+)', 1),
+        (r'^shell (.+)', 1),
+        (r'^\$ (.+)', 1),
+    ]
+    for pattern, group in shell_patterns:
+        m = re.search(pattern, msg)
+        if m and 'run_shell' in _tools and _tools['run_shell'].enabled:
+            return ('run_shell', {'command': m.group(group).strip()})
+
+    # ── YouTube transcripts ──
+    yt_patterns = [
+        (r'transcript (?:of |for |from )?(?:this )?(?:video )?(.+)', 1),
+        (r'subtitles (?:of |for |from )?(.+)', 1),
+    ]
+    for pattern, group in yt_patterns:
+        m = re.search(pattern, msg)
+        if m and 'youtube_transcript' in _tools and _tools['youtube_transcript'].enabled:
+            url = m.group(group).strip()
+            if 'youtu' in url or len(url) == 11:  # YouTube URL or video ID
+                return ('youtube_transcript', {'url': url})
+    # Direct YouTube URL detection
+    yt_url = re.search(r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[\w-]+)', msg)
+    if yt_url and 'transcript' in msg:
+        if 'youtube_transcript' in _tools and _tools['youtube_transcript'].enabled:
+            return ('youtube_transcript', {'url': yt_url.group(1)})
+
+    # ── Memory ──
+    if any(p in msg for p in ['remember this', 'save this', 'store this', 'remember that']):
+        if 'memory' in _tools and _tools['memory'].enabled:
+            # Try to extract key=value from message
+            content = re.sub(r'(remember|save|store) (this|that):?\s*', '', msg).strip()
+            if content:
+                key = content.split()[0] if content.split() else 'note'
+                return ('memory', {'action': 'save', 'key': key, 'value': content})
+    if any(p in msg for p in ['what did i save', 'my memories', 'list memories', 'what do you remember']):
+        if 'memory' in _tools and _tools['memory'].enabled:
+            return ('memory', {'action': 'list'})
+    recall_m = re.search(r'(?:recall|remember|what was) (.+)', msg)
+    if recall_m and 'memory' in _tools and _tools['memory'].enabled:
+        key = recall_m.group(1).strip()
+        if key and not any(p in key for p in ['this', 'that', 'time', 'date']):
+            return ('memory', {'action': 'recall', 'key': key})
 
     return None
 
@@ -724,3 +771,215 @@ def tool_list_directory(args: Dict) -> str:
         return f"Error: Permission denied: {p}"
     except Exception as e:
         return f"List error: {str(e)}"
+
+
+# ── Tier 3: Advanced Tools ────────────────────────────────────────────────────
+
+@register_tool(
+    "run_shell",
+    "Execute a shell command and return the output (15 second timeout)",
+    {
+        "type": "object",
+        "properties": {
+            "command": {"type": "string", "description": "Shell command to execute"}
+        },
+        "required": ["command"],
+    },
+)
+def tool_run_shell(args: Dict) -> str:
+    command = args.get("command") or args.get("input", "")
+    if not command:
+        return "Error: No command provided"
+
+    # Block dangerous commands
+    BLOCKED = ['rm -rf /', 'mkfs', 'dd if=', ':(){', 'shutdown', 'reboot',
+               'halt', 'poweroff', 'init 0', 'init 6']
+    cmd_lower = command.lower().strip()
+    for b in BLOCKED:
+        if b in cmd_lower:
+            return f"Error: Blocked command (safety): {b}"
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(Path.home()),
+        )
+
+        output = ""
+        if result.stdout:
+            output += result.stdout
+        if result.stderr:
+            output += ("\n--- stderr ---\n" + result.stderr) if output else result.stderr
+        if result.returncode != 0:
+            output += f"\n[exit code: {result.returncode}]"
+
+        if not output.strip():
+            output = "(no output)"
+
+        # Truncate
+        if len(output) > 4000:
+            output = output[:4000] + "\n\n[...truncated]"
+
+        return output
+
+    except subprocess.TimeoutExpired:
+        return "Error: Command timed out (15 second limit)"
+    except Exception as e:
+        return f"Shell error: {str(e)}"
+
+
+@register_tool(
+    "youtube_transcript",
+    "Fetch the transcript/subtitles from a YouTube video",
+    {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "YouTube video URL or ID"}
+        },
+        "required": ["url"],
+    },
+)
+def tool_youtube_transcript(args: Dict) -> str:
+    url = args.get("url") or args.get("input", "")
+    if not url:
+        return "Error: No YouTube URL provided"
+
+    # Extract video ID
+    video_id = url
+    if "youtube.com" in url or "youtu.be" in url:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(url)
+        if "youtu.be" in parsed.netloc:
+            video_id = parsed.path.lstrip("/")
+        else:
+            qs = urllib.parse.parse_qs(parsed.query)
+            video_id = qs.get("v", [url])[0]
+
+    # Try yt-dlp for subtitles (most reliable)
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--skip-download", "--write-auto-sub", "--sub-lang", "en",
+             "--convert-subs", "srt", "--print-to-file", "subtitle:%(id)s.srt",
+             "-o", "%(id)s", f"https://www.youtube.com/watch?v={video_id}"],
+            capture_output=True, text=True, timeout=30,
+            cwd="/tmp",
+        )
+
+        srt_path = Path(f"/tmp/{video_id}.en.srt")
+        if not srt_path.exists():
+            srt_path = Path(f"/tmp/{video_id}.srt")
+
+        if srt_path.exists():
+            raw = srt_path.read_text(encoding="utf-8", errors="replace")
+            # Strip SRT formatting (timestamps, indices)
+            lines = []
+            for line in raw.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                if line.isdigit():
+                    continue
+                if "-->" in line:
+                    continue
+                # Remove HTML tags from auto-subs
+                line = re.sub(r'<[^>]+>', '', line)
+                if line and line not in lines[-1:]:  # dedupe consecutive
+                    lines.append(line)
+            srt_path.unlink(missing_ok=True)
+
+            text = " ".join(lines)
+            if len(text) > 3000:
+                text = text[:3000] + "\n\n[...truncated]"
+
+            return f"Transcript for {video_id}:\n\n{text}"
+        else:
+            return f"No English subtitles found for video: {video_id}"
+
+    except FileNotFoundError:
+        return "Error: yt-dlp not installed. Run: pip install yt-dlp"
+    except subprocess.TimeoutExpired:
+        return "Error: Transcript fetch timed out (30s limit)"
+    except Exception as e:
+        return f"Transcript error: {str(e)}"
+
+
+# ── Memory Tool ──────────────────────────────────────────────────────────────
+
+MEMORY_FILE = Path.home() / "birdsnest_workspace" / ".memory.json"
+
+def _load_memory() -> Dict:
+    if MEMORY_FILE.exists():
+        try:
+            return json.loads(MEMORY_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+def _save_memory(data: Dict):
+    MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MEMORY_FILE.write_text(json.dumps(data, indent=2))
+
+
+@register_tool(
+    "memory",
+    "Save, recall, list, or delete persistent memories across sessions",
+    {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "description": "Action: save, recall, list, or delete"},
+            "key": {"type": "string", "description": "Memory key/name"},
+            "value": {"type": "string", "description": "Value to save (only for save action)"},
+        },
+        "required": ["action"],
+    },
+)
+def tool_memory(args: Dict) -> str:
+    action = (args.get("action") or "list").lower().strip()
+    key = args.get("key", "").strip()
+    value = args.get("value", "")
+
+    mem = _load_memory()
+
+    if action == "save":
+        if not key:
+            return "Error: 'key' required for save"
+        if not value:
+            return "Error: 'value' required for save"
+        mem[key] = {"value": value, "saved_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        _save_memory(mem)
+        return f"Saved memory: '{key}'"
+
+    elif action in ("recall", "get", "load"):
+        if not key:
+            return "Error: 'key' required for recall"
+        if key in mem:
+            entry = mem[key]
+            return f"Memory '{key}' (saved {entry.get('saved_at', '?')}):\n{entry['value']}"
+        else:
+            return f"No memory found for key: '{key}'"
+
+    elif action == "list":
+        if not mem:
+            return "No memories saved yet."
+        lines = ["Saved memories:\n"]
+        for k, v in mem.items():
+            preview = str(v.get("value", ""))[:60]
+            lines.append(f"  • {k}: {preview}")
+        return "\n".join(lines)
+
+    elif action == "delete":
+        if not key:
+            return "Error: 'key' required for delete"
+        if key in mem:
+            del mem[key]
+            _save_memory(mem)
+            return f"Deleted memory: '{key}'"
+        else:
+            return f"No memory found for key: '{key}'"
+
+    else:
+        return f"Unknown action: '{action}'. Use: save, recall, list, or delete"
