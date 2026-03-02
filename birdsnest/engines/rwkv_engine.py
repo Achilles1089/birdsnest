@@ -108,8 +108,10 @@ def _v7_time_mixing(layer_id, H, N, x, x_prev, v_first, state,
 
     vk = v.view(H, N, 1) @ k.view(H, 1, N)
     ab = (-kk).view(H, N, 1) @ (kk*a).view(H, 1, N)
-    state = state * w.view(H, 1, N) + state @ ab.float() + vk.float()
-    out = state.to(dtype=x.dtype) @ r.view(H, N, 1)
+    # Accumulate in fp32 for numerical stability, then cast back
+    state = state.float() * w.view(H, 1, N) + state.float() @ ab.float() + vk.float()
+    state = state.to(dtype=x.dtype)
+    out = state @ r.view(H, N, 1)
 
     out = F.group_norm(out.view(1, H*N), num_groups=H, weight=ln_w, bias=ln_b, eps=64e-5).view(H*N)
     out = out + ((r * k * r_k).view(H, N).sum(dim=-1, keepdim=True) * v.view(H, N)).view(H*N)
@@ -226,7 +228,7 @@ class RWKVEngine(InferenceEngine):
     def load(self, model_path: str) -> Dict[str, Any]:
         """Load an RWKV model (.pth) with MPS GPU acceleration."""
         self.device = self.detect_device()
-        dtype = torch.float32
+        dtype = torch.float16  # fp16 = 2x less memory bandwidth = faster inference
 
         t0 = time.time()
         
@@ -276,11 +278,12 @@ class RWKVEngine(InferenceEngine):
             z['blocks.0.att.v1'] = z['blocks.0.att.a1']
             z['blocks.0.att.v2'] = z['blocks.0.att.a2']
         else:
-            # v6: convert and move
+            # v6: convert and move (fp16 for speed, time_ params stay fp32 for precision)
             for k in z:
-                z[k] = z[k].float().to(device=self.device)
                 if '.time_' in k:
-                    z[k] = z[k].squeeze()
+                    z[k] = z[k].float().to(device=self.device).squeeze()
+                else:
+                    z[k] = z[k].to(dtype=dtype, device=self.device)
                 if '.time_faaaa' in k:
                     z[k] = z[k].unsqueeze(-1)
 
@@ -309,8 +312,8 @@ class RWKVEngine(InferenceEngine):
 
     def _init_state(self):
         """Initialize state and prime with system prompt."""
-        dtype = torch.float32
-        self.state = self._make_state(dtype)
+        # x_prev states use weight dtype (fp16), WKV state stays fp32
+        self.state = self._make_state()
 
         system_prompt = (
             "\nYou are a helpful, knowledgeable AI assistant. "
@@ -326,16 +329,17 @@ class RWKVEngine(InferenceEngine):
         self.init_out = out.clone() if out is not None else None
         self.init_state = copy.deepcopy(self.state)
 
-    def _make_state(self, dtype=torch.float32) -> list:
-        """Create fresh zero state."""
+    def _make_state(self) -> list:
+        """Create fresh zero state. x_prev in fp16, WKV state in fp32."""
+        weight_dtype = torch.float16  # Matches weight dtype
         state = [None] * (self.n_layer * 3)
         for i in range(self.n_layer):
-            state[i*3+0] = torch.zeros(self.n_embd, dtype=dtype, device=self.device)
+            state[i*3+0] = torch.zeros(self.n_embd, dtype=weight_dtype, device=self.device)  # x_prev for att
             state[i*3+1] = torch.zeros(
                 (self.n_head, self.head_size, self.head_size),
-                dtype=torch.float, device=self.device
+                dtype=torch.float, device=self.device  # WKV state — fp32 for stability
             )
-            state[i*3+2] = torch.zeros(self.n_embd, dtype=dtype, device=self.device)
+            state[i*3+2] = torch.zeros(self.n_embd, dtype=weight_dtype, device=self.device)  # x_prev for ffn
         return state
 
     def _forward(self, token: int) -> torch.Tensor:
