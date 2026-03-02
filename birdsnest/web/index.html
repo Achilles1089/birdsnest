@@ -188,9 +188,12 @@
 
         <!-- Tab Bar -->
         <div class="model-tabs">
-            <button class="model-tab active" data-tab="ai" onclick="switchModelTab('ai')">🤖 AI</button>
-            <button class="model-tab" data-tab="image" onclick="switchModelTab('image')">🎨 Image</button>
-            <button class="model-tab" data-tab="translation" onclick="switchModelTab('translation')">🌐 Lang</button>
+            <button class="model-tab active" data-tab="ai" onclick="switchModelTab('ai')">🤖 AI <span class="tab-badge"
+                    id="badgeAi"></span></button>
+            <button class="model-tab" data-tab="image" onclick="switchModelTab('image')">🎨 Img <span class="tab-badge"
+                    id="badgeImage"></span></button>
+            <button class="model-tab" data-tab="translation" onclick="switchModelTab('translation')">🌐 Lang <span
+                    class="tab-badge" id="badgeLang"></span></button>
             <button class="model-tab" data-tab="music" onclick="switchModelTab('music')">🎵 Music</button>
             <button class="model-tab" data-tab="embed" onclick="switchModelTab('embed')">📎 Embed</button>
         </div>

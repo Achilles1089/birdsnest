@@ -307,6 +307,27 @@ header h1 {
     display: block;
 }
 
+.tab-badge {
+    display: inline-block;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    margin-left: 2px;
+    vertical-align: middle;
+}
+
+.model-tab.active .tab-badge {
+    background: rgba(139, 156, 247, 0.2);
+    color: #8b9cf7;
+}
+
 .panel-header {
     display: flex;
     justify-content: space-between;

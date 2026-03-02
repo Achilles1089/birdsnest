@@ -285,6 +285,10 @@ async function loadModels() {
             document.getElementById('modelDot').className = 'model-dot';
         }
 
+        // Tab badge: total local models
+        const aiBadge = document.getElementById('badgeAi');
+        if (aiBadge) aiBadge.textContent = (data.local || []).length || '';
+
         // Disk usage
         document.getElementById('diskUsage').textContent =
             `${data.disk_usage.total_gb} GB • ${data.disk_usage.model_count} models`;
@@ -632,6 +636,10 @@ function loadImageModels() {
     `;
     document.getElementById('activeImageModel').className = '';
 
+    // Tab badge
+    const imgBadge = document.getElementById('badgeImage');
+    if (imgBadge) imgBadge.textContent = IMAGE_MODEL_CATALOG.length;
+
     // Available models list
     const list = document.getElementById('imageModelsList');
     const others = IMAGE_MODEL_CATALOG.filter(m => m.id !== activeImageModel);
@@ -699,6 +707,10 @@ async function loadTranslationModels() {
 
         const installedPairs = TRANSLATION_CATALOG.filter(m => installed.has(m.pair));
         const availablePairs = TRANSLATION_CATALOG.filter(m => !installed.has(m.pair));
+
+        // Tab badge
+        const langBadge = document.getElementById('badgeLang');
+        if (langBadge) langBadge.textContent = installedPairs.length || '';
 
         installedList.innerHTML = installedPairs.length > 0
             ? installedPairs.map(m => `
