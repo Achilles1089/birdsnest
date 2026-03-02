@@ -429,13 +429,14 @@ async def websocket_chat(websocket: WebSocket):
                         user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens
                     ):
                         token_count += 1
-                        buffer += piece
 
-                        # Already confirmed this is normal text — flush immediately
+                        # Already confirmed this is normal text — send immediately, skip buffering
                         if normal_mode_confirmed:
                             await websocket.send_json({"type": "token", "content": piece})
                             await asyncio.sleep(0)
                             continue
+
+                        buffer += piece
 
                         # Check for complete tool call
                         fmt, match = detect_tool_call(buffer)
