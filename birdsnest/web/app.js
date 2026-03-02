@@ -709,5 +709,97 @@ async function loadTools() {
                 </label>
             </div>
         `).join('');
+
+        // Update sidebar count
+        const countEl = document.getElementById('toolCount');
+        if (countEl) countEl.textContent = data.tools.length;
     } catch { }
 }
+
+// ── Tools Sidebar ────────────────────────────────────────────────
+function toggleToolsSidebar() {
+    const sidebar = document.getElementById('toolsSidebar');
+    const chatArea = document.getElementById('chatArea');
+    const inputArea = document.querySelector('.input-area');
+    const isOpen = sidebar.classList.toggle('open');
+
+    if (chatArea) chatArea.classList.toggle('sidebar-open', isOpen);
+    if (inputArea) inputArea.classList.toggle('sidebar-open', isOpen);
+
+    // Close other panels when sidebar opens
+    if (isOpen) {
+        document.getElementById('settingsPanel')?.classList.remove('open');
+        document.getElementById('docsPanel')?.classList.remove('open');
+        document.getElementById('panelOverlay')?.classList.remove('active');
+    }
+}
+
+function fireToolCard(card) {
+    const type = card.dataset.tool;
+
+    if (type === 'instant') {
+        // Instant tool — send the prompt immediately
+        const prompt = card.dataset.prompt;
+        if (prompt) _sendAsUser(prompt);
+        return;
+    }
+
+    if (type === 'input') {
+        // Toggle active state
+        const wasActive = card.classList.contains('active');
+
+        // Close all other active cards
+        document.querySelectorAll('.tool-card.active').forEach(c => c.classList.remove('active'));
+
+        if (!wasActive) {
+            card.classList.add('active');
+            // Focus the input after animation
+            const input = card.querySelector('.tool-input');
+            if (input) {
+                setTimeout(() => input.focus(), 200);
+            }
+        }
+        return;
+    }
+}
+
+function handleToolInput(event, input) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const value = input.value.trim();
+    if (!value) return;
+
+    const card = input.closest('.tool-card');
+    const prefix = card.dataset.prefix || '';
+    const action = card.dataset.action || '';
+
+    let message;
+    if (action === 'file') {
+        message = `read file ${value}`;
+    } else if (action === 'python') {
+        message = `run python ${value}`;
+    } else if (prefix === 'translate ') {
+        // "translate hello to spanish" — value should contain "text to lang"
+        message = `translate ${value}`;
+    } else {
+        message = prefix + value;
+    }
+
+    _sendAsUser(message);
+    input.value = '';
+    card.classList.remove('active');
+}
+
+function sendQuickAction(prompt) {
+    _sendAsUser(prompt);
+}
+
+function _sendAsUser(text) {
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    input.value = text;
+    sendMessage();
+}
+

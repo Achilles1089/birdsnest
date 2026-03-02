@@ -350,6 +350,52 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
         if key and not any(p in key for p in ['this', 'that', 'time', 'date']):
             return ('memory', {'action': 'recall', 'key': key})
 
+    # ── Weather ──
+    weather_patterns = [
+        (r'weather (?:in |for |at )?(.+)', 1),
+        (r'forecast (?:in |for |at )?(.+)', 1),
+        (r"what's the weather (?:in |at |like in )?(.+)", 1),
+        (r'temperature (?:in |at )?(.+)', 1),
+    ]
+    for pattern, group in weather_patterns:
+        m = re.search(pattern, msg)
+        if m and 'weather' in _tools and _tools['weather'].enabled:
+            location = m.group(group).strip().rstrip('?')
+            if location:
+                return ('weather', {'location': location})
+
+    # ── Clipboard ──
+    clip_patterns = ['clipboard', 'paste', 'what did i copy', 'show clipboard', 'my clipboard',
+                     "what's on my clipboard", 'read clipboard']
+    if any(p in msg for p in clip_patterns):
+        if 'clipboard' in _tools and _tools['clipboard'].enabled:
+            return ('clipboard', {'action': 'read'})
+
+    # ── Screenshot ──
+    ss_patterns = ['take a screenshot', 'screenshot', 'screencap', 'capture screen', 'screen grab']
+    if any(p in msg for p in ss_patterns):
+        if 'screenshot' in _tools and _tools['screenshot'].enabled:
+            return ('screenshot', {})
+
+    # ── Todo ──
+    todo_add = re.search(r'(?:add (?:a )?todo|new todo|add task|new task):?\s*(.+)', msg)
+    if todo_add and 'todo' in _tools and _tools['todo'].enabled:
+        return ('todo', {'action': 'add', 'task': todo_add.group(1).strip()})
+    if any(p in msg for p in ['list todos', 'my todos', 'show todos', 'show tasks', 'list tasks', 'my tasks']):
+        if 'todo' in _tools and _tools['todo'].enabled:
+            return ('todo', {'action': 'list'})
+    todo_done = re.search(r'(?:complete|finish|done|check) (?:todo |task )?#?(\d+)', msg)
+    if todo_done and 'todo' in _tools and _tools['todo'].enabled:
+        return ('todo', {'action': 'complete', 'task': todo_done.group(1)})
+    todo_del = re.search(r'delete (?:todo |task )?#?(\d+)', msg)
+    if todo_del and 'todo' in _tools and _tools['todo'].enabled:
+        return ('todo', {'action': 'delete', 'task': todo_del.group(1)})
+
+    # ── Translate ──
+    trans_m = re.search(r'translate (.+?)(?:\s+(?:to|into|in)\s+)(\w+)', msg)
+    if trans_m and 'translate' in _tools and _tools['translate'].enabled:
+        return ('translate', {'text': trans_m.group(1).strip().strip('"\''), 'to': trans_m.group(2).strip()})
+
     return None
 
 
@@ -983,3 +1029,283 @@ def tool_memory(args: Dict) -> str:
 
     else:
         return f"Unknown action: '{action}'. Use: save, recall, list, or delete"
+
+
+# ── Tier 4: Sidebar Tools ────────────────────────────────────────────────────
+
+@register_tool(
+    "weather",
+    "Get current weather for a city or location",
+    {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string", "description": "City name or location"}
+        },
+        "required": ["location"],
+    },
+)
+def tool_weather(args: Dict) -> str:
+    location = args.get("location") or args.get("input", "")
+    if not location:
+        return "Error: No location provided"
+
+    # wttr.in — free, no API key needed
+    try:
+        import urllib.request
+        url = f"https://wttr.in/{urllib.request.quote(location)}?format=%l:+%C+%t+%h+%w"
+        req = urllib.request.Request(url, headers={"User-Agent": "curl/7.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = resp.read().decode("utf-8").strip()
+        
+        # Also get a more detailed forecast
+        url2 = f"https://wttr.in/{urllib.request.quote(location)}?format=%l\\n🌡️+%t+(feels+like+%f)\\n💧+Humidity:+%h\\n💨+Wind:+%w\\n🌅+Sunrise:+%S+|+Sunset:+%s\\n📊+UV+Index:+%u"
+        req2 = urllib.request.Request(url2, headers={"User-Agent": "curl/7.0"})
+        with urllib.request.urlopen(req2, timeout=10) as resp2:
+            detail = resp2.read().decode("utf-8").strip()
+
+        return f"Weather for {location}:\n\n{detail}"
+
+    except Exception as e:
+        return f"Weather error: {str(e)}"
+
+
+@register_tool(
+    "clipboard",
+    "Read or write the system clipboard",
+    {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "description": "read or write"},
+            "text": {"type": "string", "description": "Text to copy (for write action)"},
+        },
+        "required": [],
+    },
+)
+def tool_clipboard(args: Dict) -> str:
+    action = (args.get("action") or "read").lower().strip()
+    text = args.get("text", "")
+
+    if action == "write" and text:
+        try:
+            proc = subprocess.run(
+                ["pbcopy"], input=text, text=True, timeout=5
+            )
+            return f"Copied {len(text)} chars to clipboard"
+        except Exception as e:
+            return f"Clipboard write error: {str(e)}"
+    else:
+        # Read clipboard
+        try:
+            result = subprocess.run(
+                ["pbpaste"], capture_output=True, text=True, timeout=5
+            )
+            content = result.stdout
+            if not content:
+                return "Clipboard is empty"
+            if len(content) > 2000:
+                content = content[:2000] + "\n\n[...truncated]"
+            return f"Clipboard contents ({len(result.stdout)} chars):\n\n{content}"
+        except Exception as e:
+            return f"Clipboard read error: {str(e)}"
+
+
+@register_tool(
+    "screenshot",
+    "Take a screenshot of the screen",
+    {
+        "type": "object",
+        "properties": {
+            "region": {"type": "string", "description": "Optional: 'full' (default) or 'selection'"},
+        },
+        "required": [],
+    },
+)
+def tool_screenshot(args: Dict) -> str:
+    region = (args.get("region") or "full").lower().strip()
+    
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filepath = WORKSPACE_DIR / f"screenshot_{timestamp}.png"
+
+    try:
+        cmd = ["screencapture", "-x"]  # -x = no sound
+        if region == "selection":
+            cmd.append("-i")  # interactive selection
+        cmd.append(str(filepath))
+
+        result = subprocess.run(cmd, timeout=15, capture_output=True, text=True)
+
+        if filepath.exists():
+            size_kb = filepath.stat().st_size / 1024
+            return f"Screenshot saved: {filepath}\nSize: {size_kb:.1f} KB"
+        else:
+            return "Screenshot was cancelled or failed"
+
+    except subprocess.TimeoutExpired:
+        return "Screenshot timed out"
+    except Exception as e:
+        return f"Screenshot error: {str(e)}"
+
+
+# ── Todo Tool ────────────────────────────────────────────────────────────────
+
+TODOS_FILE = Path.home() / "birdsnest_workspace" / ".todos.json"
+
+def _load_todos() -> list:
+    if TODOS_FILE.exists():
+        try:
+            return json.loads(TODOS_FILE.read_text())
+        except Exception:
+            return []
+    return []
+
+def _save_todos(data: list):
+    TODOS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TODOS_FILE.write_text(json.dumps(data, indent=2))
+
+
+@register_tool(
+    "todo",
+    "Manage a persistent todo/task list (add, list, complete, delete)",
+    {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "description": "add, list, complete, or delete"},
+            "task": {"type": "string", "description": "Task description (for add) or task number (for complete/delete)"},
+        },
+        "required": ["action"],
+    },
+)
+def tool_todo(args: Dict) -> str:
+    action = (args.get("action") or "list").lower().strip()
+    task = args.get("task", "").strip()
+
+    todos = _load_todos()
+
+    if action == "add":
+        if not task:
+            return "Error: task description required"
+        todos.append({
+            "task": task,
+            "done": False,
+            "created": time.strftime("%Y-%m-%d %H:%M"),
+        })
+        _save_todos(todos)
+        return f"Added todo #{len(todos)}: {task}"
+
+    elif action == "list":
+        if not todos:
+            return "No todos yet. Add one with: add todo [task]"
+        lines = ["Your todos:\n"]
+        for i, t in enumerate(todos, 1):
+            status = "✅" if t.get("done") else "⬜"
+            lines.append(f"  {status} {i}. {t['task']}")
+        done_count = sum(1 for t in todos if t.get("done"))
+        lines.append(f"\n{done_count}/{len(todos)} completed")
+        return "\n".join(lines)
+
+    elif action in ("complete", "done", "check"):
+        try:
+            idx = int(task) - 1
+            if 0 <= idx < len(todos):
+                todos[idx]["done"] = True
+                _save_todos(todos)
+                return f"Completed: {todos[idx]['task']}"
+            else:
+                return f"Invalid todo number: {task}. You have {len(todos)} todos."
+        except ValueError:
+            return "Error: provide the todo number to complete"
+
+    elif action == "delete":
+        try:
+            idx = int(task) - 1
+            if 0 <= idx < len(todos):
+                removed = todos.pop(idx)
+                _save_todos(todos)
+                return f"Deleted: {removed['task']}"
+            else:
+                return f"Invalid todo number: {task}"
+        except ValueError:
+            return "Error: provide the todo number to delete"
+
+    else:
+        return f"Unknown action: '{action}'. Use: add, list, complete, or delete"
+
+
+@register_tool(
+    "translate",
+    "Translate text between languages",
+    {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "Text to translate"},
+            "to": {"type": "string", "description": "Target language (e.g. 'spanish', 'french', 'ja')"},
+            "from_lang": {"type": "string", "description": "Source language (auto-detect if omitted)"},
+        },
+        "required": ["text", "to"],
+    },
+)
+def tool_translate(args: Dict) -> str:
+    text = args.get("text", "")
+    to_lang = args.get("to", "")
+    if not text or not to_lang:
+        return "Error: 'text' and 'to' (target language) are required"
+
+    # Try argostranslate (offline)
+    try:
+        import argostranslate.translate
+        installed = argostranslate.translate.get_installed_languages()
+        
+        # Find source and target
+        from_lang = args.get("from_lang", "en")
+        
+        # Map common names to codes
+        lang_map = {
+            "english": "en", "spanish": "es", "french": "fr", "german": "de",
+            "italian": "it", "portuguese": "pt", "russian": "ru", "chinese": "zh",
+            "japanese": "ja", "korean": "ko", "arabic": "ar", "hindi": "hi",
+        }
+        to_code = lang_map.get(to_lang.lower(), to_lang.lower())
+        from_code = lang_map.get(from_lang.lower(), from_lang.lower())
+
+        src = next((l for l in installed if l.code == from_code), None)
+        tgt = next((l for l in installed if l.code == to_code), None)
+
+        if src and tgt:
+            translation = src.get_translation(tgt)
+            if translation:
+                result = translation.translate(text)
+                return f"Translation ({from_code} → {to_code}):\n\n{result}"
+
+        return f"Language pair not installed: {from_code} → {to_code}. Install with: pip install argostranslate"
+
+    except ImportError:
+        pass
+
+    # Fallback: try `trans` CLI (translate-shell)
+    try:
+        to_code_map = {
+            "english": "en", "spanish": "es", "french": "fr", "german": "de",
+            "italian": "it", "portuguese": "pt", "russian": "ru", "chinese": "zh-CN",
+            "japanese": "ja", "korean": "ko", "arabic": "ar",
+        }
+        to_code = to_code_map.get(to_lang.lower(), to_lang.lower())
+
+        result = subprocess.run(
+            ["trans", "-b", f":{to_code}", text],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.stdout.strip():
+            return f"Translation (→ {to_lang}):\n\n{result.stdout.strip()}"
+        return f"Translation failed. Install: brew install translate-shell"
+
+    except FileNotFoundError:
+        return (
+            f"No translation backend available.\n"
+            f"Install one of:\n"
+            f"  • pip install argostranslate (offline)\n"
+            f"  • brew install translate-shell (online)"
+        )
+    except Exception as e:
+        return f"Translation error: {str(e)}"
+

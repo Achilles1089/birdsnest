@@ -7,7 +7,7 @@
     <title>Bird's Nest — Local AI Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 
 <body>
@@ -28,6 +28,9 @@
             </div>
         </div>
         <div class="header-right">
+            <button class="icon-btn" onclick="toggleToolsSidebar()" title="Tools" id="toolsSidebarBtn">
+                🧰
+            </button>
             <button class="icon-btn" onclick="toggleDocsPanel()" title="Documents (RAG)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -52,6 +55,110 @@
             </button>
         </div>
     </header>
+
+    <!-- ── Tools Sidebar ─────────────────────────────────────── -->
+    <div class="tools-sidebar" id="toolsSidebar">
+        <div class="panel-header">
+            <h2>🧰 Tools</h2>
+            <span class="tool-count" id="toolCount">17</span>
+        </div>
+        <div class="tool-grid" id="toolGrid">
+            <!-- Instant tools (no input needed) -->
+            <button class="tool-card" data-tool="instant" data-prompt="what time is it" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🕐</span><span class="tool-name">Time</span>
+            </button>
+            <button class="tool-card" data-tool="instant" data-prompt="system info" onclick="fireToolCard(this)">
+                <span class="tool-emoji">⚙️</span><span class="tool-name">System</span>
+            </button>
+            <button class="tool-card" data-tool="instant" data-prompt="clipboard" onclick="fireToolCard(this)">
+                <span class="tool-emoji">📋</span><span class="tool-name">Clipboard</span>
+            </button>
+            <button class="tool-card" data-tool="instant" data-prompt="take a screenshot" onclick="fireToolCard(this)">
+                <span class="tool-emoji">📸</span><span class="tool-name">Screenshot</span>
+            </button>
+            <button class="tool-card" data-tool="instant" data-prompt="list todos" onclick="fireToolCard(this)">
+                <span class="tool-emoji">✅</span><span class="tool-name">Todos</span>
+            </button>
+            <button class="tool-card" data-tool="instant" data-prompt="list memories" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🧠</span><span class="tool-name">Memory</span>
+            </button>
+
+            <!-- Input tools -->
+            <button class="tool-card" data-tool="input" data-prefix="what is " data-placeholder="e.g. 256 * 7"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">🧮</span><span class="tool-name">Calculator</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="e.g. 256 * 7"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="search for " data-placeholder="query..."
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">🔍</span><span class="tool-name">Search</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="query..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="run " data-placeholder="ls -la"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">💻</span><span class="tool-name">Shell</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="ls -la"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="weather in " data-placeholder="city name"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">🌤️</span><span class="tool-name">Weather</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="city name"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="translate " data-suffix=" to "
+                data-placeholder="hello → spanish" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🌐</span><span class="tool-name">Translate</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="hello to spanish"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="transcript of " data-placeholder="YouTube URL"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">📺</span><span class="tool-name">YouTube</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="YouTube URL"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="file path" data-action="file"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">📁</span><span class="tool-name">Files</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path to read"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="Python code"
+                data-action="python" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🐍</span><span class="tool-name">Python</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="print('hello')"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="fetch " data-placeholder="URL"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">🌍</span><span class="tool-name">Fetch URL</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="https://..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+
+            <!-- Disabled / Coming Soon -->
+            <button class="tool-card disabled" disabled>
+                <span class="tool-emoji">🎨</span><span class="tool-name">Image Gen</span>
+                <span class="tool-badge">Soon</span>
+            </button>
+            <button class="tool-card disabled" disabled>
+                <span class="tool-emoji">🗄️</span><span class="tool-name">Database</span>
+                <span class="tool-badge">Soon</span>
+            </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button class="quick-pill" onclick="sendQuickAction('what time is it')">🕐 Time</button>
+            <button class="quick-pill" onclick="sendQuickAction('system info')">⚙️ System</button>
+            <button class="quick-pill" onclick="sendQuickAction('list memories')">🧠 Memories</button>
+            <button class="quick-pill" onclick="sendQuickAction('list todos')">✅ Todos</button>
+            <button class="quick-pill" onclick="sendQuickAction('clipboard')">📋 Clipboard</button>
+        </div>
+    </div>
 
     <!-- ── Model Panel ─────────────────────────────────────── -->
     <div class="panel-overlay" id="panelOverlay" onclick="closeAllPanels()"></div>
@@ -183,7 +290,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=3"></script>
+    <script src="/static/app.js?v=4"></script>
 </body>
 
 </html>
