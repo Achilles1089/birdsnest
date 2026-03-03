@@ -209,12 +209,26 @@ class RWKVEngine(InferenceEngine):
         self._find_tokenizer()
 
     def _find_tokenizer(self):
-        """Locate tokenizer file relative to project root."""
-        # engines/rwkv_engine.py -> engines/ -> birdsnest/ -> ChatRWKV/
+        """Locate tokenizer file — checks PyInstaller bundle, then project root."""
+        tok_filename = "rwkv_vocab_v20230424.txt"
+        candidates = []
+
+        # 1. PyInstaller bundle (_MEIPASS)
+        import sys
+        if hasattr(sys, '_MEIPASS'):
+            candidates.append(os.path.join(sys._MEIPASS, "tokenizer", tok_filename))
+
+        # 2. Relative to this file: engines/rwkv_engine.py -> engines/ -> birdsnest/ -> ChatRWKV/
         base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        tok_path = os.path.join(base, "tokenizer", "rwkv_vocab_v20230424.txt")
-        if os.path.exists(tok_path):
-            self.tokenizer = RWKVTokenizer(tok_path)
+        candidates.append(os.path.join(base, "tokenizer", tok_filename))
+
+        # 3. CWD fallback
+        candidates.append(os.path.join(os.getcwd(), "tokenizer", tok_filename))
+
+        for tok_path in candidates:
+            if os.path.exists(tok_path):
+                self.tokenizer = RWKVTokenizer(tok_path)
+                return
 
     def _detect_version(self, keys: list) -> int:
         """Detect v6 vs v7 from weight key names."""
@@ -314,6 +328,12 @@ class RWKVEngine(InferenceEngine):
         """Initialize state and prime with system prompt."""
         # x_prev states use weight dtype (fp16), WKV state stays fp32
         self.state = self._make_state()
+
+        if self.tokenizer is None:
+            # No tokenizer found — can't prime, but model can still be used
+            self.init_out = None
+            self.init_state = copy.deepcopy(self.state)
+            return
 
         system_prompt = (
             "\nYou are a helpful, knowledgeable AI assistant. "

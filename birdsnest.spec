@@ -19,6 +19,8 @@ PROJ_DIR = os.path.abspath('.')
 datas = [
     # Web UI
     ('birdsnest/web', 'birdsnest/web'),
+    # Tokenizer
+    ('tokenizer', 'tokenizer'),
     # Version file
     ('VERSION', '.'),
 ]
