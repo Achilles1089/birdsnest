@@ -509,8 +509,13 @@ class RWKVEngine(InferenceEngine):
                 if new_text and '\ufffd' not in new_text:
                     yield new_text
                 break
-            if decoded.endswith('\n\n') and len(all_tokens) > 10:
-                break
+            if decoded.endswith('\n\n') and len(all_tokens) > 50:
+                # For thinking models, only stop on \n\n after </think> has been output
+                if is_g1:
+                    if '</think>' in decoded:
+                        break
+                else:
+                    break
 
             # Echo detection — if the model is repeating the user's prompt, stop
             if len(all_tokens) > 20:
