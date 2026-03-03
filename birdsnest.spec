@@ -70,6 +70,17 @@ hiddenimports = [
     'birdsnest.models',
     'birdsnest.tools',
     'birdsnest.rag',
+
+    # Native window (pywebview)
+    'webview',
+    'webview.platforms',
+    'webview.platforms.cocoa',
+    'objc',
+    'Foundation',
+    'AppKit',
+    'WebKit',
+    'PyObjCTools',
+    'Quartz',
 ]
 
 # ── Exclude heavy stuff we don't need ──

@@ -2,16 +2,13 @@
 """
 Bird's Nest Launcher — macOS .app entry point.
 
-Starts the FastAPI server on a free port and opens the browser.
+Starts the FastAPI server and opens a native window via pywebview.
 Runs as the main process inside the .app bundle.
 """
 
 import os
 import sys
 import socket
-import signal
-import subprocess
-import webbrowser
 import time
 import threading
 
@@ -26,17 +23,14 @@ def get_free_port():
 def get_app_dir():
     """Get the application directory (works both bundled and dev)."""
     if getattr(sys, "frozen", False):
-        # Running as PyInstaller bundle
         return os.path.dirname(sys.executable)
     else:
-        # Running from source
         return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_version():
     """Read version from VERSION file."""
     app_dir = get_app_dir()
-    # Check a few locations
     for path in [
         os.path.join(app_dir, "VERSION"),
         os.path.join(app_dir, "..", "Resources", "VERSION"),
@@ -59,6 +53,19 @@ def wait_for_server(port, timeout=30):
     return False
 
 
+def run_server(port):
+    """Run the uvicorn server."""
+    import uvicorn
+
+    uvicorn.run(
+        "birdsnest.server:app",
+        host="127.0.0.1",
+        port=port,
+        reload=False,
+        log_level="warning",
+    )
+
+
 def main():
     port = get_free_port()
     version = get_version()
@@ -71,47 +78,37 @@ def main():
     os.environ["BIRDSNEST_VERSION"] = version
     os.environ["BIRDSNEST_APP_MODE"] = "1"
 
-    # Ensure models directory exists
-    models_dir = os.path.expanduser("~/birdsnest_models")
-    os.makedirs(models_dir, exist_ok=True)
+    # Ensure directories exist
+    os.makedirs(os.path.expanduser("~/birdsnest_models"), exist_ok=True)
+    os.makedirs(os.path.expanduser("~/birdsnest_workspace"), exist_ok=True)
 
-    # Ensure workspace directory exists
-    workspace_dir = os.path.expanduser("~/birdsnest_workspace")
-    os.makedirs(workspace_dir, exist_ok=True)
-
-    # Start the server in a thread
+    # Start the server in a background thread
     server_thread = threading.Thread(target=run_server, args=(port,), daemon=True)
     server_thread.start()
 
-    # Wait for server to be ready, then open browser
-    if wait_for_server(port):
-        url = f"http://localhost:{port}"
-        print(f"   ✅ Server ready at {url}")
-        webbrowser.open(url)
-    else:
+    # Wait for server to be ready
+    url = f"http://localhost:{port}"
+    if not wait_for_server(port):
         print("   ❌ Server failed to start within 30s")
         sys.exit(1)
 
-    # Keep main thread alive — handle Ctrl+C / app quit
-    try:
-        while True:
-            time.sleep(1)
-    except (KeyboardInterrupt, SystemExit):
-        print("\n   Shutting down Bird's Nest...")
-        sys.exit(0)
+    print(f"   ✅ Server ready at {url}")
 
+    # Open native window
+    import webview
 
-def run_server(port):
-    """Run the uvicorn server."""
-    import uvicorn
-
-    uvicorn.run(
-        "birdsnest.server:app",
-        host="127.0.0.1",
-        port=port,
-        reload=False,
-        log_level="warning",
+    window = webview.create_window(
+        "Bird's Nest",
+        url,
+        width=1100,
+        height=750,
+        min_size=(800, 500),
+        text_select=True,
     )
+    webview.start()  # Blocks until window is closed
+
+    print("   Shutting down Bird's Nest...")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
