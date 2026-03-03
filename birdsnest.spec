@@ -92,11 +92,6 @@ excludes = [
     'pytest',
     'setuptools',
     'pip',
-    # CUDA — we only need MPS on macOS
-    'torch.cuda',
-    'torch._C._cuda',
-    'torch.backends.cuda',
-    'torch.backends.cudnn',
 ]
 
 

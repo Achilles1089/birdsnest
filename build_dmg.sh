@@ -13,27 +13,33 @@ DMG_NAME="BirdsNest-${VERSION}"
 echo "🪹 Building Bird's Nest v${VERSION}"
 echo "─────────────────────────────────────"
 
-# ── Step 1: Check dependencies ──
+# ── Step 1: Activate venv if it exists ──
+if [ -f ".venv/bin/activate" ]; then
+    echo "🐍 Activating virtual environment..."
+    source .venv/bin/activate
+fi
+
+# ── Step 2: Check dependencies ──
 echo "📋 Checking build dependencies..."
 command -v python3 >/dev/null || { echo "❌ python3 not found"; exit 1; }
-command -v pyinstaller >/dev/null || { echo "⚠️  Installing PyInstaller..."; pip install pyinstaller; }
+command -v pyinstaller >/dev/null || { echo "⚠️  Installing PyInstaller..."; pip3 install pyinstaller; }
 
 if ! command -v create-dmg >/dev/null; then
     echo "⚠️  create-dmg not found. Installing via Homebrew..."
     brew install create-dmg
 fi
 
-# ── Step 2: Ensure icon exists ──
+# ── Step 3: Ensure icon exists ──
 if [ ! -f "assets/icon.icns" ]; then
     echo "⚠️  No icon found. Generating from emoji..."
     bash build_icon.sh
 fi
 
-# ── Step 3: Clean previous builds ──
+# ── Step 4: Clean previous builds ──
 echo "🧹 Cleaning previous builds..."
 rm -rf build/ dist/
 
-# ── Step 4: Run PyInstaller ──
+# ── Step 5: Run PyInstaller ──
 echo "📦 Running PyInstaller (this takes a few minutes)..."
 pyinstaller birdsnest.spec --noconfirm
 
