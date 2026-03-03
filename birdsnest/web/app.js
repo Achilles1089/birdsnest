@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── WebSocket ────────────────────────────────────────────────
+let _updateChecked = false;
+
 function connectWebSocket() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws/chat`);
@@ -31,6 +33,7 @@ function connectWebSocket() {
     ws.onopen = () => {
         setStatus('Connected', 'green');
         document.getElementById('sendBtn').disabled = false;
+        checkForUpdates();
     };
 
     ws.onclose = () => {
@@ -389,6 +392,29 @@ function renderSearchCards(data) {
         </a>`;
     }).join('');
     return `<div class="search-results-list">${cards}</div>`;
+}
+
+// ── Auto-Update Check ────────────────────────────────────────
+async function checkForUpdates() {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    try {
+        const res = await fetch('/api/update-check');
+        const data = await res.json();
+        if (data.update_available) {
+            const messages = document.getElementById('messages');
+            const banner = document.createElement('div');
+            banner.className = 'update-banner';
+            banner.innerHTML = `
+                <span>🔄 Bird's Nest v${data.latest_version} is available!</span>
+                ${data.download_url
+                    ? `<a href="${data.download_url}" target="_blank" rel="noopener">Download</a>`
+                    : ''}
+                <button onclick="this.parentElement.remove()">✕</button>
+            `;
+            messages.insertBefore(banner, messages.firstChild);
+        }
+    } catch (e) { /* silent fail */ }
 }
 
 function addSystemMessage(text, type = 'info') {

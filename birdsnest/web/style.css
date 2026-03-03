@@ -710,6 +710,40 @@ main {
     padding-bottom: 20px;
 }
 
+/* Update Banner */
+.update-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 8px;
+    margin: 10px 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.update-banner a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.update-banner a:hover {
+    text-decoration: underline;
+}
+
+.update-banner button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+
 .welcome-message {
     text-align: center;
     padding: 80px 20px 40px;

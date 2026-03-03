@@ -515,6 +515,75 @@ async def rag_status():
     return {"rag_enabled": rag_enabled, "available": True, "stats": rag_pipeline.get_stats()}
 
 
+# ── REST API: Update Check ─────────────────────────────────────────────────
+
+_update_cache = {"checked": False, "result": None}
+
+@app.get("/api/update-check")
+async def update_check():
+    """Check if a newer version is available on GitHub Releases."""
+    if _update_cache["checked"]:
+        return _update_cache["result"]
+
+    import urllib.request
+
+    # Read current version
+    version = os.environ.get("BIRDSNEST_VERSION", "")
+    if not version:
+        version_file = Path(__file__).parent.parent / "VERSION"
+        if version_file.exists():
+            version = version_file.read_text().strip()
+        else:
+            version = "dev"
+
+    result = {
+        "current_version": version,
+        "update_available": False,
+        "latest_version": version,
+        "download_url": None,
+    }
+
+    if version == "dev":
+        _update_cache["checked"] = True
+        _update_cache["result"] = result
+        return result
+
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/Achilles1089/birdsnest/releases/latest",
+            headers={"User-Agent": "BirdsNest-UpdateCheck", "Accept": "application/vnd.github.v3+json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            latest = data.get("tag_name", "").lstrip("v")
+            if latest and latest != version:
+                # Simple version comparison
+                try:
+                    from packaging.version import Version
+                    if Version(latest) > Version(version):
+                        result["update_available"] = True
+                except Exception:
+                    # Fallback: string comparison
+                    if latest > version:
+                        result["update_available"] = True
+
+                if result["update_available"]:
+                    result["latest_version"] = latest
+                    # Find DMG asset
+                    for asset in data.get("assets", []):
+                        if asset["name"].endswith(".dmg"):
+                            result["download_url"] = asset["browser_download_url"]
+                            break
+                    if not result["download_url"]:
+                        result["download_url"] = data.get("html_url", "")
+    except Exception:
+        pass  # Silently fail — update check is best-effort
+
+    _update_cache["checked"] = True
+    _update_cache["result"] = result
+    return result
+
+
 # ── REST API: Tools ────────────────────────────────────────────────────────
 
 @app.get("/api/tools")
@@ -818,10 +887,12 @@ if WORKSPACE_SERVE.exists():
 
 def main():
     import uvicorn
+    port = int(os.environ.get("BIRDSNEST_PORT", "7861"))
+    host = "127.0.0.1" if os.environ.get("BIRDSNEST_APP_MODE") else "0.0.0.0"
     uvicorn.run(
         "birdsnest.server:app",
-        host="0.0.0.0",
-        port=7861,
+        host=host,
+        port=port,
         reload=False,
         log_level="info",
     )
