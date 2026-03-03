@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -29,6 +29,9 @@ from birdsnest.tools import (
 BASE_DIR = Path(__file__).parent.parent
 WEB_DIR = Path(__file__).parent / "web"
 DATA_DIR = BASE_DIR / "data"
+WORKSPACE_DIR = Path.home() / "birdsnest_workspace"
+IMAGES_DIR = WORKSPACE_DIR / "images"
+UPLOADS_DIR = WORKSPACE_DIR / "uploads"
 
 # In app mode, use ~/birdsnest_models (writable); in dev mode, use repo's models/
 if os.environ.get("BIRDSNEST_APP_MODE"):
@@ -215,14 +218,86 @@ async def delete_image_model(dir_name: str):
 # ── Image performance settings ────────────────────────────────────────────────
 image_quantize = "8"   # Default: int8 quantization
 image_low_ram = False
+image_style_preset = "none"
+image_style_intensity = 2  # 1=Subtle, 2=Normal, 3=Strong
 
 @app.post("/api/image-settings")
 async def set_image_settings(request: Request):
-    global image_quantize, image_low_ram
+    global image_quantize, image_low_ram, image_style_preset, image_style_intensity
     data = await request.json()
     image_quantize = data.get("quantize", "8")
     image_low_ram = data.get("low_ram", False)
-    return {"success": True, "quantize": image_quantize, "low_ram": image_low_ram}
+    image_style_preset = data.get("style_preset", "none")
+    image_style_intensity = data.get("style_intensity", 2)
+    return {"success": True, "quantize": image_quantize, "low_ram": image_low_ram,
+            "style_preset": image_style_preset, "style_intensity": image_style_intensity}
+
+
+# ── REST API: Image Upload & Library ─────────────────────────────────────────
+
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    """Upload an image to the workspace. Returns URL for inline display."""
+    # Validate file type
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Unsupported image type: {ext}. Allowed: {', '.join(allowed)}")
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    safe_name = Path(file.filename).stem[:40].replace(" ", "_")
+    filename = f"{safe_name}_{timestamp}{ext}"
+    filepath = UPLOADS_DIR / filename
+
+    content = await file.read()
+    filepath.write_bytes(content)
+
+    size_kb = len(content) / 1024
+    return {
+        "filename": filename,
+        "url": f"/workspace/uploads/{filename}",
+        "path": str(filepath),
+        "size_kb": round(size_kb, 1),
+    }
+
+
+@app.get("/api/image-library")
+async def list_image_library():
+    """List all images in workspace (generated + uploaded)."""
+    images = []
+
+    for source, dir_path in [("generated", IMAGES_DIR), ("uploaded", UPLOADS_DIR)]:
+        if not dir_path.exists():
+            continue
+        for f in sorted(dir_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                stat = f.stat()
+                images.append({
+                    "filename": f.name,
+                    "url": f"/workspace/{source == 'generated' and 'images' or 'uploads'}/{f.name}",
+                    "path": str(f),
+                    "size_kb": round(stat.st_size / 1024, 1),
+                    "created": stat.st_mtime,
+                    "source": source,
+                })
+
+    return {"images": images, "total": len(images)}
+
+
+@app.delete("/api/image-library/{filename}")
+async def delete_library_image(filename: str):
+    """Delete an image from the workspace."""
+    # Check both directories
+    for dir_path in [IMAGES_DIR, UPLOADS_DIR]:
+        filepath = dir_path / filename
+        if filepath.exists():
+            size_kb = round(filepath.stat().st_size / 1024, 1)
+            filepath.unlink()
+            return {"success": True, "filename": filename, "freed_kb": size_kb}
+    raise HTTPException(404, f"Image not found: {filename}")
 
 
 # ── REST API: Music Models ───────────────────────────────────────────────────
@@ -646,6 +721,7 @@ async def websocket_chat(websocket: WebSocket):
             max_tokens = msg.get("max_tokens", 500)
             use_rag = msg.get("rag", rag_enabled)
             use_tools = msg.get("tools", tools_enabled)
+            image_path = msg.get("image_path", "")  # From drag-drop/attach
 
             if not prompt.strip():
                 continue
@@ -657,6 +733,9 @@ async def websocket_chat(websocket: WebSocket):
                 intent = detect_user_intent(prompt)
                 if intent:
                     tool_name, tool_args = intent
+                    # Inject image path into tool args if available
+                    if image_path and 'image_path' not in tool_args:
+                        tool_args['image_path'] = image_path
 
                     # Send start marker — use model name if loaded, else fallback
                     model_label = "Bird's Nest"
@@ -717,8 +796,20 @@ async def websocket_chat(websocket: WebSocket):
                 except Exception:
                     pass
 
-            # User prompt stays clean — just the user's message + any RAG context
-            user_prompt = (rag_context or "") + prompt
+            # Tool system prompt (tells model about its capabilities)
+            tool_context = ""
+            if use_tools:
+                tool_context = build_tool_system_prompt()
+                if tool_context:
+                    tool_context = tool_context + "\n\n"
+
+            # Image context injection
+            image_context = ""
+            if image_path:
+                image_context = f"[User shared an image: {image_path}]\n"
+
+            # User prompt: system context + image context + RAG context + user message
+            user_prompt = tool_context + image_context + (rag_context or "") + prompt
 
             # Send start marker — find nickname
             nickname = active_engine.model_name
@@ -882,10 +973,11 @@ async def serve_index():
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
-# Mount workspace for generated images
-WORKSPACE_SERVE = Path.home() / "birdsnest_workspace"
-if WORKSPACE_SERVE.exists():
-    app.mount("/workspace", StaticFiles(directory=str(WORKSPACE_SERVE)), name="workspace")
+# Mount workspace for generated images + uploads
+WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/workspace", StaticFiles(directory=str(WORKSPACE_DIR)), name="workspace")
 
 
 # ── Entry Point ─────────────────────────────────────────────────────────────

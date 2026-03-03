@@ -231,10 +231,44 @@ def execute_tool(name: str, args: Dict[str, str]) -> str:
 
 def build_tool_system_prompt() -> str:
     """
-    Minimal system prompt — just inform the model tools exist.
+    Concise system prompt informing the model about available capabilities.
     Actual tool routing is handled server-side via detect_user_intent().
     """
-    return ""  # No system prompt injection — tools are handled server-side now
+    enabled = get_enabled_tools()
+    if not enabled:
+        return ""
+
+    capabilities = []
+    if 'generate_image' in enabled:
+        capabilities.append("generate images from text descriptions (multiple AI models: Z-Image Turbo, FLUX.2, FIBO Lite, and more)")
+    if 'upscale_image' in enabled:
+        capabilities.append("upscale/enhance images to higher resolution (SeedVR2)")
+    if 'edit_image' in enabled:
+        capabilities.append("edit images with text instructions (FLUX.2)")
+    if 'search_files' in enabled:
+        capabilities.append("search your files and folders by name or content")
+    if 'search_images' in enabled:
+        capabilities.append("search for images online")
+    if 'search_web' in enabled:
+        capabilities.append("search the web for information")
+    if 'generate_music' in enabled:
+        capabilities.append("generate music from text descriptions")
+    if 'translate' in enabled:
+        capabilities.append("translate text between languages")
+    if 'run_shell' in enabled:
+        capabilities.append("run shell commands")
+    if 'screenshot' in enabled:
+        capabilities.append("take screenshots")
+
+    if not capabilities:
+        return ""
+
+    return (
+        "You are Bird's Nest, a helpful AI assistant running locally on Mac. "
+        "You can: " + "; ".join(capabilities) + ". "
+        "Users can upload or drag-and-drop images into the chat. "
+        "Just ask naturally — say 'generate an image of...' or 'upscale this image' and the tools will activate automatically."
+    )
 
 
 def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
@@ -421,6 +455,42 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
             prompt = m.group(group).strip().rstrip('.')
             if prompt and len(prompt) > 3:  # Avoid triggering on "make it" etc
                 return ('generate_image', {'prompt': prompt})
+
+    # ── Image Upscale ──
+    upscale_patterns = [
+        r'(?:upscale|enhance|uprez|upres|make bigger|increase resolution)',
+        r'(?:super.?resolution|enlarge) (?:the |this |that |my )?(?:image|picture|photo)',
+    ]
+    if any(re.search(p, msg) for p in upscale_patterns):
+        if 'upscale_image' in _tools and _tools['upscale_image'].enabled:
+            return ('upscale_image', {})
+
+    # ── Image Edit (FLUX.2) ──
+    edit_patterns = [
+        (r'edit (?:the |this |that |my )?(?:image|picture|photo)(?:\s+to)?\s+(.+)', 1),
+        (r'(?:change|modify|alter|transform|update) (?:the |this |that |my )?(?:image|picture|photo)(?:\s+to)?\s+(.+)', 1),
+        (r'(?:make|turn) (?:the |this |that |my )?(?:image|picture|photo) (.+)', 1),
+        (r'(?:add|remove|replace) (.+?) (?:in|from|on) (?:the |this |that |my )?(?:image|picture|photo)', 1),
+    ]
+    for pattern, group in edit_patterns:
+        m = re.search(pattern, msg)
+        if m and 'edit_image' in _tools and _tools['edit_image'].enabled:
+            edit_prompt = m.group(group).strip().rstrip('.')
+            if edit_prompt and len(edit_prompt) > 3:
+                return ('edit_image', {'edit_prompt': edit_prompt})
+
+    # ── File Search ──
+    file_search_patterns = [
+        (r'(?:find|locate|search for) (?:files?|documents?) (?:about |matching |named |called )?(.+)', 1),
+        (r'(?:where is|where\'s) (?:my |the )?(.+?)(?:\?|$)', 1),
+        (r'find (?:me )?(?:the )?(.+?) file', 1),
+    ]
+    for pattern, group in file_search_patterns:
+        m = re.search(pattern, msg)
+        if m and 'search_files' in _tools and _tools['search_files'].enabled:
+            query = m.group(group).strip().rstrip('.')
+            if query and len(query) > 2:
+                return ('search_files', {'query': query})
 
     # ── Database Query ──
     db_patterns = [
@@ -1335,10 +1405,11 @@ def tool_clipboard(args: Dict) -> str:
 )
 def tool_screenshot(args: Dict) -> str:
     region = (args.get("region") or "full").lower().strip()
-    
-    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filepath = WORKSPACE_DIR / f"screenshot_{timestamp}.png"
+    filename = f"screenshot_{timestamp}.png"
+    filepath = IMAGES_DIR / filename
 
     try:
         cmd = ["screencapture", "-x"]  # -x = no sound
@@ -1350,7 +1421,13 @@ def tool_screenshot(args: Dict) -> str:
 
         if filepath.exists():
             size_kb = filepath.stat().st_size / 1024
-            return f"Screenshot saved: {filepath}\nSize: {size_kb:.1f} KB"
+            serve_url = f"/workspace/images/{filename}"
+            return (
+                f"Screenshot captured\n"
+                f"Size: {size_kb:.1f} KB\n"
+                f"File: {filepath}\n"
+                f"URL: {serve_url}"
+            )
         else:
             return "Screenshot was cancelled or failed"
 
@@ -1525,12 +1602,12 @@ IMAGES_DIR = Path.home() / "birdsnest_workspace" / "images"
 
 @register_tool(
     "generate_image",
-    "Generate an image from a text prompt using local AI (MLX Flux)",
+    "Generate an image from a text prompt using local AI (MLX Flux/Z-Image/FIBO)",
     {
         "type": "object",
         "properties": {
             "prompt": {"type": "string", "description": "Text description of the image to generate"},
-            "steps": {"type": "integer", "description": "Number of inference steps (default 4, more=better quality)"},
+            "steps": {"type": "integer", "description": "Number of inference steps (default varies by model)"},
             "width": {"type": "integer", "description": "Image width (default 512)"},
             "height": {"type": "integer", "description": "Image height (default 512)"},
         },
@@ -1542,32 +1619,63 @@ def tool_generate_image(args: Dict) -> str:
     if not prompt:
         return "Error: prompt is required"
 
-    steps = args.get("steps", 4)
+    # ── Style preset prompt injection ──
+    STYLE_PROMPT_PREFIXES = {
+        'vivid': [
+            'vibrant, colorful, ',
+            'vibrant, colorful, high saturation, vivid colors, ',
+            'extremely vivid, ultra-saturated, vibrant neon colors, eye-catching, ',
+        ],
+        'cinematic': [
+            'cinematic lighting, ',
+            'cinematic, dramatic lighting, film grain, anamorphic, ',
+            'cinematic masterpiece, dramatic lighting, shallow depth of field, film grain, anamorphic lens flare, ',
+        ],
+        'anime': [
+            'anime style, ',
+            'anime style, cel shaded, clean lines, manga inspired, ',
+            'high quality anime art, detailed cel shading, vibrant anime colors, sharp clean lines, studio quality, ',
+        ],
+        'illustration': [
+            'digital illustration, ',
+            'digital illustration, clean lines, flat colors, vector art style, ',
+            'professional digital illustration, highly detailed, clean vector lines, flat design, artstation quality, ',
+        ],
+        'oil-painting': [
+            'oil painting style, ',
+            'oil painting, textured brushstrokes, classical art, rich colors, ',
+            'masterful oil painting, heavy impasto brushstrokes, classical fine art, gallery quality, rich deep colors, ',
+        ],
+        'photorealism': [
+            'photorealistic, ',
+            'photorealistic, DSLR quality, sharp focus, natural lighting, ',
+            'ultra photorealistic, 8k DSLR photograph, sharp focus, natural lighting, RAW photo, ',
+        ],
+        'watercolor': [
+            'watercolor painting, ',
+            'watercolor painting, soft edges, flowing pigments, paper texture, ',
+            'professional watercolor art, delicate washes, flowing wet-on-wet pigments, visible paper texture, ',
+        ],
+    }
+
+    try:
+        from birdsnest.server import image_style_preset, image_style_intensity
+        if image_style_preset and image_style_preset != 'none' and image_style_preset in STYLE_PROMPT_PREFIXES:
+            intensity_idx = max(0, min(2, image_style_intensity - 1))
+            prefix = STYLE_PROMPT_PREFIXES[image_style_preset][intensity_idx]
+            prompt = prefix + prompt
+    except ImportError:
+        pass
+
     width = args.get("width", 512)
     height = args.get("height", 512)
 
     # Ensure output directory
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    # Sanitize prompt for filename
     safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', prompt[:40]).strip('_').lower()
     filename = f"{safe_name}_{timestamp}.png"
     filepath = IMAGES_DIR / filename
-
-    # Check if mflux is available
-    try:
-        check = subprocess.run(
-            ["mflux-generate", "--help"],
-            capture_output=True, text=True, timeout=5
-        )
-        if check.returncode != 0:
-            raise FileNotFoundError
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return (
-            "mflux not installed or not found.\n"
-            "Install with: pip install mflux\n"
-            "First run will download the Flux model (~12GB)."
-        )
 
     # Read active image model from config
     model_config_path = WORKSPACE_DIR / ".birdsnest_image_model"
@@ -1575,21 +1683,49 @@ def tool_generate_image(args: Dict) -> str:
     if model_config_path.exists():
         selected_model = model_config_path.read_text().strip() or "schnell"
 
-    # Auto-adjust steps for high-quality models
-    fast_models = {"schnell", "z-image-turbo"}
-    if selected_model not in fast_models and steps <= 4:
-        steps = 20  # Dev/Krea/Qwen need more steps
+    # ── CLI mapping: each model family has its own mflux command ──
+    IMAGE_MODEL_CLI = {
+        # New models (recommended)
+        'z-image-turbo': {'cmd': 'mflux-generate-z-image-turbo', 'default_steps': 9},
+        'flux2-klein-4b': {'cmd': 'mflux-generate-flux2', 'default_steps': 4, 'args': ['--model-version', '4b']},
+        'fibo-lite':      {'cmd': 'mflux-generate-fibo', 'default_steps': 8, 'args': ['--model-version', 'lite']},
+        # Legacy FLUX.1 models (use generic mflux-generate with --model flag)
+        'schnell':        {'cmd': 'mflux-generate', 'default_steps': 4, 'args': ['--model', 'schnell']},
+        'dev':            {'cmd': 'mflux-generate', 'default_steps': 20, 'args': ['--model', 'dev']},
+    }
+
+    model_info = IMAGE_MODEL_CLI.get(selected_model, IMAGE_MODEL_CLI['schnell'])
+    cli_cmd = model_info['cmd']
+    default_steps = model_info['default_steps']
+    extra_args = model_info.get('args', [])
+
+    steps = args.get("steps", default_steps)
+
+    # Check if mflux CLI command is available
+    try:
+        check = subprocess.run(
+            [cli_cmd, "--help"],
+            capture_output=True, text=True, timeout=5
+        )
+        if check.returncode != 0:
+            raise FileNotFoundError
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return (
+            f"mflux command '{cli_cmd}' not found.\n"
+            f"Install with: pip install mflux\n"
+            f"Selected model: {selected_model}\n"
+            f"First run will download the model weights."
+        )
 
     # Build the mflux command
     cmd = [
-        "mflux-generate",
+        cli_cmd,
         "--prompt", prompt,
         "--output", str(filepath),
         "--steps", str(steps),
         "--width", str(width),
         "--height", str(height),
-        "--model", selected_model,
-    ]
+    ] + extra_args
 
     # Apply performance settings from server config
     try:
@@ -1599,7 +1735,6 @@ def tool_generate_image(args: Dict) -> str:
         if image_low_ram:
             cmd.append("--low-ram")
     except ImportError:
-        # Default: int8 quantization if server not reachable
         cmd.extend(["--quantize", "8"])
 
     try:
@@ -1608,16 +1743,16 @@ def tool_generate_image(args: Dict) -> str:
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,  # 5 min max
+            timeout=300,
         )
         elapsed = time.time() - t0
 
         if filepath.exists():
             size_kb = filepath.stat().st_size / 1024
-            # Return the serve URL for the frontend
             serve_url = f"/workspace/images/{filename}"
             return (
                 f"Image generated in {elapsed:.1f}s\n"
+                f"Model: {selected_model}\n"
                 f"Prompt: {prompt}\n"
                 f"Size: {width}x{height}, {size_kb:.1f} KB\n"
                 f"Steps: {steps}\n"
@@ -1626,7 +1761,7 @@ def tool_generate_image(args: Dict) -> str:
             )
         else:
             stderr = result.stderr[-500:] if result.stderr else "No error output"
-            return f"Image generation failed.\nError: {stderr}"
+            return f"Image generation failed.\nModel: {selected_model}\nCommand: {' '.join(cmd[:3])}...\nError: {stderr}"
 
     except subprocess.TimeoutExpired:
         return "Image generation timed out (5 min limit)"
@@ -1789,3 +1924,282 @@ def tool_generate_music(args: Dict) -> str:
         )
     except Exception as e:
         return f"Music generation error: {str(e)}"
+
+
+@register_tool(
+    "upscale_image",
+    "Upscale/enhance an image using SeedVR2 (1-step, no prompt needed)",
+    {
+        "type": "object",
+        "properties": {
+            "image_path": {"type": "string", "description": "Path to the image to upscale (uses most recent generated image if not specified)"},
+        },
+    },
+)
+def tool_upscale_image(args: Dict) -> str:
+    import glob
+
+    image_path = args.get("image_path", "")
+
+    # If no path specified, find the most recently generated/uploaded image
+    if not image_path:
+        candidates = []
+        for d in [IMAGES_DIR, WORKSPACE_DIR / "uploads"]:
+            if d.exists():
+                for ext in ['*.png', '*.jpg', '*.jpeg', '*.webp']:
+                    candidates.extend(d.glob(ext))
+        if not candidates:
+            return "No images found. Generate or upload an image first."
+        # Sort by modification time, newest first
+        candidates.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        image_path = str(candidates[0])
+
+    source = Path(image_path)
+    if not source.exists():
+        return f"Image not found: {image_path}"
+
+    # Output file
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    out_filename = f"upscaled_{source.stem}_{timestamp}.png"
+    out_filepath = IMAGES_DIR / out_filename
+
+    # Check if mflux-upscale-seedvr2 is available
+    try:
+        check = subprocess.run(
+            ["mflux-upscale-seedvr2", "--help"],
+            capture_output=True, text=True, timeout=5
+        )
+        if check.returncode != 0:
+            raise FileNotFoundError
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return (
+            "SeedVR2 upscaler not found.\n"
+            "Install with: pip install mflux\n"
+            "First run will download the SeedVR2 model (~4GB)."
+        )
+
+    cmd = [
+        "mflux-upscale-seedvr2",
+        "--image", str(source),
+        "--output", str(out_filepath),
+    ]
+
+    # Apply quantization settings
+    try:
+        from birdsnest.server import image_quantize, image_low_ram
+        if image_quantize and image_quantize != "none":
+            cmd.extend(["--quantize", str(image_quantize)])
+        if image_low_ram:
+            cmd.append("--low-ram")
+    except ImportError:
+        cmd.extend(["--quantize", "8"])
+
+    try:
+        t0 = time.time()
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        elapsed = time.time() - t0
+
+        if out_filepath.exists():
+            orig_kb = source.stat().st_size / 1024
+            new_kb = out_filepath.stat().st_size / 1024
+            serve_url = f"/workspace/images/{out_filename}"
+            return (
+                f"Image upscaled in {elapsed:.1f}s\n"
+                f"Original: {source.name} ({orig_kb:.0f} KB)\n"
+                f"Upscaled: {out_filename} ({new_kb:.0f} KB)\n"
+                f"File: {out_filepath}\n"
+                f"URL: {serve_url}"
+            )
+        else:
+            stderr = result.stderr[-500:] if result.stderr else "No error output"
+            return f"Upscale failed.\nError: {stderr}"
+
+    except subprocess.TimeoutExpired:
+        return "Upscale timed out (5 min limit)"
+    except Exception as e:
+        return f"Upscale error: {str(e)}"
+
+
+@register_tool(
+    "edit_image",
+    "Edit an existing image using FLUX.2 Klein (instruction-based editing)",
+    {
+        "type": "object",
+        "properties": {
+            "edit_prompt": {"type": "string", "description": "Description of the edit to apply"},
+            "image_path": {"type": "string", "description": "Path to the image to edit (uses most recent if not specified)"},
+        },
+        "required": ["edit_prompt"],
+    },
+)
+def tool_edit_image(args: Dict) -> str:
+    edit_prompt = args.get("edit_prompt", "")
+    if not edit_prompt:
+        return "Error: edit_prompt is required — describe the changes you want"
+
+    image_path = args.get("image_path", "")
+
+    # If no path specified, find the most recently generated/uploaded image
+    if not image_path:
+        candidates = []
+        for d in [IMAGES_DIR, WORKSPACE_DIR / "uploads"]:
+            if d.exists():
+                for ext in ['*.png', '*.jpg', '*.jpeg', '*.webp']:
+                    candidates.extend(d.glob(ext))
+        if not candidates:
+            return "No images found. Generate or upload an image first."
+        candidates.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        image_path = str(candidates[0])
+
+    source = Path(image_path)
+    if not source.exists():
+        return f"Image not found: {image_path}"
+
+    # Output file
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    out_filename = f"edited_{source.stem}_{timestamp}.png"
+    out_filepath = IMAGES_DIR / out_filename
+
+    # Check if mflux-generate-flux2-edit is available
+    try:
+        check = subprocess.run(
+            ["mflux-generate-flux2-edit", "--help"],
+            capture_output=True, text=True, timeout=5
+        )
+        if check.returncode != 0:
+            raise FileNotFoundError
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return (
+            "FLUX.2 editing CLI not found.\n"
+            "Install with: pip install mflux\n"
+            "Requires FLUX.2 Klein 4B model."
+        )
+
+    cmd = [
+        "mflux-generate-flux2-edit",
+        "--image", str(source),
+        "--prompt", edit_prompt,
+        "--output", str(out_filepath),
+        "--steps", "4",
+    ]
+
+    # Apply quantization settings
+    try:
+        from birdsnest.server import image_quantize, image_low_ram
+        if image_quantize and image_quantize != "none":
+            cmd.extend(["--quantize", str(image_quantize)])
+        if image_low_ram:
+            cmd.append("--low-ram")
+    except ImportError:
+        cmd.extend(["--quantize", "8"])
+
+    try:
+        t0 = time.time()
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        elapsed = time.time() - t0
+
+        if out_filepath.exists():
+            orig_kb = source.stat().st_size / 1024
+            new_kb = out_filepath.stat().st_size / 1024
+            serve_url = f"/workspace/images/{out_filename}"
+            return (
+                f"Image edited in {elapsed:.1f}s\n"
+                f"Edit: {edit_prompt}\n"
+                f"Original: {source.name} ({orig_kb:.0f} KB)\n"
+                f"Edited: {out_filename} ({new_kb:.0f} KB)\n"
+                f"File: {out_filepath}\n"
+                f"URL: {serve_url}"
+            )
+        else:
+            stderr = result.stderr[-500:] if result.stderr else "No error output"
+            return f"Image edit failed.\nError: {stderr}"
+
+    except subprocess.TimeoutExpired:
+        return "Image edit timed out (5 min limit)"
+    except Exception as e:
+        return f"Image edit error: {str(e)}"
+
+
+@register_tool(
+    "search_files",
+    "Search for files on your Mac using Spotlight (mdfind) or content search (grep)",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query (filename, keyword, or content)"},
+            "path": {"type": "string", "description": "Directory to search in (default: home folder)"},
+            "content": {"type": "boolean", "description": "Search inside file contents (slower)"},
+        },
+        "required": ["query"],
+    },
+)
+def tool_search_files(args: Dict) -> str:
+    query = args.get("query") or args.get("input", "")
+    if not query:
+        return "Error: search query required"
+
+    search_path = args.get("path", str(Path.home()))
+    content_search = args.get("content", False)
+
+    try:
+        if content_search:
+            # Content search via grep
+            cmd = [
+                "grep", "-rl", "--include=*.txt", "--include=*.md",
+                "--include=*.py", "--include=*.js", "--include=*.json",
+                "--include=*.html", "--include=*.css", "--include=*.sh",
+                "-i", query, search_path
+            ]
+        else:
+            # Spotlight metadata search (fast)
+            cmd = ["mdfind", "-onlyin", search_path, query]
+
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=15
+        )
+
+        lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        if not lines or lines == [""]:
+            return f"No files found matching: {query}"
+
+        # Limit to 20 results, add file sizes
+        output = []
+        for path_str in lines[:20]:
+            p = Path(path_str)
+            if p.exists():
+                try:
+                    size = p.stat().st_size
+                    if size < 1024:
+                        size_str = f"{size} B"
+                    elif size < 1024 * 1024:
+                        size_str = f"{size/1024:.0f} KB"
+                    else:
+                        size_str = f"{size/1024/1024:.1f} MB"
+                    mod = time.strftime("%Y-%m-%d", time.localtime(p.stat().st_mtime))
+                    output.append(f"  {p.name}  ({size_str}, {mod})\n    {path_str}")
+                except Exception:
+                    output.append(f"  {p.name}\n    {path_str}")
+
+        total = len(lines)
+        header = f"Found {total} file{'s' if total != 1 else ''} matching \"{query}\""
+        if total > 20:
+            header += f" (showing first 20)"
+
+        return header + "\n" + "\n".join(output)
+
+    except subprocess.TimeoutExpired:
+        return "File search timed out (15s limit)"
+    except Exception as e:
+        return f"File search error: {str(e)}"

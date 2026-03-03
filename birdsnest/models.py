@@ -318,6 +318,86 @@ MODEL_CATALOG = [
 ]
 
 
+# ── Image Model Catalog ─────────────────────────────────────────────────────
+
+IMAGE_MODEL_CATALOG = [
+    # ── Recommended Models ──
+    {
+        "id": "z-image-turbo",
+        "name": "Z-Image Turbo",
+        "display_name": "Z-Image Turbo ★",
+        "cli_command": "mflux-generate-z-image-turbo",
+        "hf_repo": "Alibaba-NLP/Z-Image-Turbo",
+        "default_steps": 9,
+        "size_gb": 8.0,
+        "quantized_size_gb": 4.0,
+        "capabilities": ["generate"],
+        "description": "Fastest — 9 steps, excellent quality, 4-bit available",
+    },
+    {
+        "id": "flux2-klein-4b",
+        "name": "FLUX.2 Klein 4B",
+        "display_name": "FLUX.2 Klein 4B",
+        "cli_command": "mflux-generate-flux2",
+        "cli_edit_command": "mflux-generate-flux2-edit",
+        "hf_repo": "black-forest-labs/FLUX.2-klein-4b",
+        "default_steps": 4,
+        "size_gb": 8.0,
+        "capabilities": ["generate", "edit"],
+        "description": "4 steps, supports image editing mode",
+    },
+    {
+        "id": "fibo-lite",
+        "name": "FIBO Lite",
+        "display_name": "FIBO Lite",
+        "cli_command": "mflux-generate-fibo",
+        "hf_repo": "briaai/FIBO-lite",
+        "default_steps": 8,
+        "size_gb": 10.0,
+        "capabilities": ["generate"],
+        "description": "JSON-native prompting, precise style control",
+    },
+    {
+        "id": "seedvr2",
+        "name": "SeedVR2 Upscaler",
+        "display_name": "SeedVR2 Upscaler",
+        "cli_command": "mflux-upscale-seedvr2",
+        "hf_repo": "ByteDance/SeedVR2",
+        "default_steps": 1,
+        "size_gb": 4.0,
+        "capabilities": ["upscale"],
+        "description": "1-step upscale — no prompt needed",
+    },
+    # ── Legacy FLUX.1 ──
+    {
+        "id": "schnell",
+        "name": "Flux Schnell",
+        "display_name": "Flux Schnell (Legacy)",
+        "cli_command": "mflux-generate",
+        "cli_args": ["--model", "schnell"],
+        "hf_repo": "black-forest-labs/FLUX.1-schnell",
+        "default_steps": 4,
+        "size_gb": 12.0,
+        "capabilities": ["generate"],
+        "description": "Legacy — 4 steps, good quality",
+        "legacy": True,
+    },
+    {
+        "id": "dev",
+        "name": "Flux Dev",
+        "display_name": "Flux Dev (Legacy)",
+        "cli_command": "mflux-generate",
+        "cli_args": ["--model", "dev"],
+        "hf_repo": "black-forest-labs/FLUX.1-dev",
+        "default_steps": 20,
+        "size_gb": 12.0,
+        "capabilities": ["generate"],
+        "description": "Legacy — 20 steps, best FLUX.1 quality",
+        "legacy": True,
+    },
+]
+
+
 class ModelManager:
     """Manages local models folder and HuggingFace downloads."""
 

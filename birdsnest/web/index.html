@@ -35,6 +35,9 @@
                     <path d="M8 21h8M12 17v4" />
                 </svg>
             </button>
+            <button class="icon-btn" onclick="toggleImageLibrary()" title="Image Library" id="imageLibraryBtn">
+                🖼️
+            </button>
             <button class="icon-btn" onclick="toggleToolsSidebar()" title="Tools" id="toolsSidebarBtn">
                 🧰
             </button>
@@ -67,101 +70,147 @@
     <div class="tools-sidebar" id="toolsSidebar">
         <div class="panel-header">
             <h2>🧰 Tools</h2>
-            <span class="tool-count" id="toolCount">17</span>
+            <span class="tool-count" id="toolCount">19</span>
         </div>
         <div class="tool-grid" id="toolGrid">
             <!-- Instant tools (no input needed) -->
             <button class="tool-card" data-tool="instant" data-prompt="what time is it" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🕐</span><span class="tool-name">Time</span>
+                <span class="tool-hint">"what time is it"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="system info" onclick="fireToolCard(this)">
                 <span class="tool-emoji">⚙️</span><span class="tool-name">System</span>
+                <span class="tool-hint">"system info"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="clipboard" onclick="fireToolCard(this)">
                 <span class="tool-emoji">📋</span><span class="tool-name">Clipboard</span>
+                <span class="tool-hint">"clipboard"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="take a screenshot" onclick="fireToolCard(this)">
                 <span class="tool-emoji">📸</span><span class="tool-name">Screenshot</span>
+                <span class="tool-hint">"take a screenshot"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="list todos" onclick="fireToolCard(this)">
                 <span class="tool-emoji">✅</span><span class="tool-name">Todos</span>
+                <span class="tool-hint">"list todos"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="list memories" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🧠</span><span class="tool-name">Memory</span>
+                <span class="tool-hint">"list memories"</span>
             </button>
 
             <!-- Input tools -->
             <button class="tool-card" data-tool="input" data-prefix="what is " data-placeholder="e.g. 256 * 7"
                 onclick="fireToolCard(this)">
                 <span class="tool-emoji">🧮</span><span class="tool-name">Calculator</span>
+                <span class="tool-hint">"calculate 256 * 7"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="e.g. 256 * 7"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="search for " data-placeholder="query..."
                 onclick="fireToolCard(this)">
-                <span class="tool-emoji">🔍</span><span class="tool-name">Search</span>
+                <span class="tool-emoji">🔍</span><span class="tool-name">Web Search</span>
+                <span class="tool-hint">"search for latest news"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="query..."
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="run " data-placeholder="ls -la"
                 onclick="fireToolCard(this)">
                 <span class="tool-emoji">💻</span><span class="tool-name">Shell</span>
+                <span class="tool-hint">"run ls -la"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="ls -la"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="weather in " data-placeholder="city name"
                 onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌤️</span><span class="tool-name">Weather</span>
+                <span class="tool-hint">"weather in Miami"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="city name"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="translate " data-suffix=" to "
                 data-placeholder="hello → spanish" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌐</span><span class="tool-name">Translate</span>
+                <span class="tool-hint">"translate hello to spanish"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="hello to spanish"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="transcript of " data-placeholder="YouTube URL"
                 onclick="fireToolCard(this)">
                 <span class="tool-emoji">📺</span><span class="tool-name">YouTube</span>
+                <span class="tool-hint">"transcript of [URL]"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="YouTube URL"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="file path" data-action="file"
                 onclick="fireToolCard(this)">
-                <span class="tool-emoji">📁</span><span class="tool-name">Files</span>
+                <span class="tool-emoji">📁</span><span class="tool-name">Read File</span>
+                <span class="tool-hint">"read ~/file.txt"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path to read"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="Python code"
                 data-action="python" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🐍</span><span class="tool-name">Python</span>
+                <span class="tool-hint">"python print('hello')"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="print('hello')"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="fetch " data-placeholder="URL"
                 onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌍</span><span class="tool-name">Fetch URL</span>
+                <span class="tool-hint">"fetch https://..."</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="https://..."
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
 
-            <!-- Image Gen + Music Gen + Database — active -->
+            <!-- Image, Search & Creative tools -->
             <button class="tool-card" data-tool="input" data-prefix="generate an image of "
                 data-placeholder="a sunset over mountains" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎨</span><span class="tool-name">Image Gen</span>
+                <span class="tool-hint">"generate an image of..."</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="a sunset..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="upscale the image " data-placeholder="to 2160p"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">⬆️</span><span class="tool-name">Upscale</span>
+                <span class="tool-hint">"upscale this image"</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="2x, 3x, 2160p"
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="edit the image to "
+                data-placeholder="add sunset sky" onclick="fireToolCard(this)">
+                <span class="tool-emoji">✂️</span><span class="tool-name">Edit Image</span>
+                <span class="tool-hint">"edit the image to..."</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="add snow, remove bg..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="search images of "
+                data-placeholder="golden retriever" onclick="fireToolCard(this)">
+                <span class="tool-emoji">🖼️</span><span class="tool-name">Image Search</span>
+                <span class="tool-hint">"search images of cats"</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="cats, sunset..."
+                        onkeydown="handleToolInput(event, this)"></div>
+            </button>
+            <button class="tool-card" data-tool="input" data-prefix="find files about " data-placeholder="invoice"
+                onclick="fireToolCard(this)">
+                <span class="tool-emoji">🔎</span><span class="tool-name">File Search</span>
+                <span class="tool-hint">"find files about invoice"</span>
+                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="invoice, readme..."
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="generate music of "
                 data-placeholder="epic orchestral battle" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎵</span><span class="tool-name">Music Gen</span>
+                <span class="tool-hint">"generate music of lofi"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="lofi chill..."
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
             <button class="tool-card" data-tool="input" data-prefix="query database "
                 data-placeholder="db.sqlite: SELECT *" data-action="database" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🗄️</span><span class="tool-name">Database</span>
+                <span class="tool-hint">"query database path: SQL"</span>
                 <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path: SQL"
                         onkeydown="handleToolInput(event, this)"></div>
             </button>
@@ -225,6 +274,33 @@
             <div class="panel-section">
                 <h3>Installed (HF Cache)</h3>
                 <div id="imageInstalledList" class="model-list"></div>
+            </div>
+            <div class="panel-section">
+                <h3>🎨 Style Preset</h3>
+                <div class="style-preset-chips" id="stylePresetChips">
+                    <button class="style-chip active" data-style="none"
+                        onclick="setStylePreset('none', this)">None</button>
+                    <button class="style-chip" data-style="vivid" onclick="setStylePreset('vivid', this)">✨
+                        Vivid</button>
+                    <button class="style-chip" data-style="cinematic" onclick="setStylePreset('cinematic', this)">🎬
+                        Cinematic</button>
+                    <button class="style-chip" data-style="anime" onclick="setStylePreset('anime', this)">🌸
+                        Anime</button>
+                    <button class="style-chip" data-style="illustration"
+                        onclick="setStylePreset('illustration', this)">✏️ Illustration</button>
+                    <button class="style-chip" data-style="oil-painting"
+                        onclick="setStylePreset('oil-painting', this)">🖼️ Oil Painting</button>
+                    <button class="style-chip" data-style="photorealism"
+                        onclick="setStylePreset('photorealism', this)">📷 Photorealism</button>
+                    <button class="style-chip" data-style="watercolor" onclick="setStylePreset('watercolor', this)">💧
+                        Watercolor</button>
+                </div>
+                <div class="style-intensity-row">
+                    <label>Intensity</label>
+                    <input type="range" id="styleIntensity" min="1" max="3" value="2" step="1"
+                        oninput="document.getElementById('styleIntensityLabel').textContent = ['Subtle','Normal','Strong'][this.value-1]; saveStyleSettings()">
+                    <span id="styleIntensityLabel">Normal</span>
+                </div>
             </div>
             <div class="panel-section">
                 <h3>Available</h3>
@@ -404,9 +480,47 @@
         </div>
     </main>
 
+    <!-- ── Drop Overlay ─────────────────────────────────────── -->
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-overlay-content">
+            <span class="drop-icon">📷</span>
+            <span>Drop image here</span>
+        </div>
+    </div>
+
+    <!-- ── Image Library Panel ──────────────────────────────── -->
+    <div class="image-library-panel" id="imageLibraryPanel">
+        <div class="panel-header">
+            <h2>🖼️ Image Library</h2>
+            <span id="imageLibraryCount" style="font-size: 12px; color: var(--text-muted);"></span>
+        </div>
+        <div class="panel-section">
+            <div class="image-library-filters">
+                <button class="filter-pill active" data-filter="all" onclick="filterLibrary('all', this)">All</button>
+                <button class="filter-pill" data-filter="generated"
+                    onclick="filterLibrary('generated', this)">Generated</button>
+                <button class="filter-pill" data-filter="uploaded"
+                    onclick="filterLibrary('uploaded', this)">Uploaded</button>
+            </div>
+            <div class="image-library-grid" id="imageLibraryGrid"></div>
+        </div>
+    </div>
+
+    <!-- ── Fullsize Image Modal ─────────────────────────────── -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal()">
+        <img id="imageModalImg" src="" alt="Full size image">
+        <button class="image-modal-close" onclick="closeImageModal()">✕</button>
+    </div>
+
     <!-- ── Input Bar ───────────────────────────────────────── -->
     <div class="input-area">
         <div class="input-container">
+            <input type="file" id="imageFileInput" style="display:none"
+                accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleImageFileSelect(this)">
+            <button id="attachBtn" class="attach-btn" onclick="document.getElementById('imageFileInput').click()"
+                title="Attach image">
+                📎
+            </button>
             <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
                 oninput="autoResize(this)"></textarea>
             <button id="sendBtn" onclick="sendMessage()" disabled>

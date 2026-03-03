@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateRAGStatus();
     loadTools();
     loadImageSettings();
+    setupDragDrop();
     document.getElementById('chatInput').focus();
 });
 
@@ -234,8 +235,11 @@ function connectWebSocket() {
                     // Live timer for slow tools
                     const slowToolMessages = {
                         'generate_image': '🎨 Generating image',
-                        'generate_music': '🎵 Generating music',
+                        'upscale_image': '🔍 Upscaling image',
+                        'edit_image': '✂️ Editing image',
+                        'search_files': '🔎 Searching files',
                         'screenshot': '📸 Taking screenshot',
+                        'generate_music': '🎵 Generating music',
                         'translate': '🌐 Translating',
                         'youtube_transcript': '📺 Fetching transcript',
                         'search_web': '🔍 Searching',
@@ -280,8 +284,32 @@ function connectWebSocket() {
                     // Check if result contains an image URL
                     const imgMatch = data.result && data.result.match(/URL:\s*(\/workspace\/\S+\.(?:png|jpg|jpeg|webp))/i);
                     let mediaHtml = '';
-                    if (imgMatch) {
-                        mediaHtml = `<img src="${imgMatch[1]}" alt="Generated image" style="max-width:100%;border-radius:8px;margin-top:8px;">`;
+
+                    // Before/After for upscale/edit tools
+                    if ((data.name === 'upscale_image' || data.name === 'edit_image') && imgMatch) {
+                        const origMatch = data.result.match(/Original:\s*(\S+)/i);
+                        const origName = origMatch ? origMatch[1] : null;
+                        let origUrl = null;
+                        if (origName) {
+                            // Try both images/ and uploads/ paths
+                            origUrl = `/workspace/images/${origName}`;
+                        }
+                        if (origUrl) {
+                            mediaHtml = `<div class="image-comparison">
+                                <div class="image-comparison-item">
+                                    <img class="chat-image" src="${origUrl}" alt="Original" onclick="viewFullImage('${origUrl}')">
+                                    <span class="image-comparison-label">Original</span>
+                                </div>
+                                <div class="image-comparison-item">
+                                    <img class="chat-image" src="${imgMatch[1]}" alt="Upscaled" onclick="viewFullImage('${imgMatch[1]}')">
+                                    <span class="image-comparison-label">Upscaled</span>
+                                </div>
+                            </div>`;
+                        } else {
+                            mediaHtml = `<img class="chat-image" src="${imgMatch[1]}" alt="Upscaled image" onclick="viewFullImage('${imgMatch[1]}')">`;
+                        }
+                    } else if (imgMatch) {
+                        mediaHtml = `<img class="chat-image" src="${imgMatch[1]}" alt="Generated image" onclick="viewFullImage('${imgMatch[1]}')">`;
                     }
 
                     // Check if result contains an audio URL
@@ -447,12 +475,23 @@ function sendMessage() {
     input.value = '';
     input.style.height = '24px';
 
-    ws.send(JSON.stringify({
+    // Build WS payload with optional image context
+    const payload = {
         message: text,
         temperature: parseFloat(document.getElementById('temperature').value),
         top_p: parseFloat(document.getElementById('topP').value),
         max_tokens: parseInt(document.getElementById('maxTokens').value),
-    }));
+    };
+
+    if (_pendingImage) {
+        payload.image_path = _pendingImage.path;
+        payload.image_url = _pendingImage.url;
+        payload.image_filename = _pendingImage.filename;
+        _pendingImage = null;
+        input.placeholder = 'Type a message...';
+    }
+
+    ws.send(JSON.stringify(payload));
 }
 
 function handleKeydown(e) {
@@ -845,14 +884,36 @@ function switchModelTab(tab) {
 
 // ── Image Models (mflux) ──────────────────────────────
 const IMAGE_MODEL_CATALOG = [
-    // All FLUX.1 models share the same core (~30 GB for T5+CLIP+VAE, downloaded once).
-    // The transformer weights add ~33 GB at fp32. Total ~63 GB per model.
-    // With int4 quantization, transformer drops to ~6 GB → total ~36 GB.
-    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, size: '~63 GB', desc: 'Fastest — 4 steps, good quality' },
-    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Best quality — 20 steps' },
-    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Creative style, artistic output' },
-    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Good at text in images' },
-    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, size: '~63 GB', desc: 'Speed-optimized, 4-step turbo' },
+    // ── New Models (recommended) ──
+    {
+        id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐⭐⭐', steps: 9,
+        size: '~8 GB (4-bit)', desc: '★ Fastest — 9 steps, excellent quality',
+        cli: 'mflux-generate-z-image-turbo'
+    },
+    {
+        id: 'flux2-klein-4b', name: 'FLUX.2 Klein 4B', quality: '⭐⭐⭐⭐⭐', steps: 4,
+        size: '~8 GB (q8)', desc: '4 steps, image editing support',
+        cli: 'mflux-generate-flux2'
+    },
+    {
+        id: 'fibo-lite', name: 'FIBO Lite', quality: '⭐⭐⭐⭐', steps: 8,
+        size: '~10 GB (q8)', desc: 'JSON-native prompting, precise control',
+        cli: 'mflux-generate-fibo'
+    },
+    {
+        id: 'seedvr2', name: 'SeedVR2 Upscaler', quality: 'N/A', steps: 1,
+        size: '~4 GB', desc: '1-step upscale — no prompt needed',
+        cli: 'mflux-upscale-seedvr2', type: 'upscaler'
+    },
+    // ── Legacy FLUX.1 ──
+    {
+        id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4,
+        size: '~12 GB (q8)', desc: 'Legacy — 4 steps, good quality', legacy: true
+    },
+    {
+        id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20,
+        size: '~12 GB (q8)', desc: 'Legacy — 20 steps, best FLUX.1 quality', legacy: true
+    },
 ];
 
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
@@ -912,7 +973,10 @@ async function loadImageModels() {
     // Available catalog (with select)
     const list = document.getElementById('imageModelsList');
     const others = IMAGE_MODEL_CATALOG.filter(m => m.id !== activeImageModel);
-    list.innerHTML = others.map(m => `
+    list.innerHTML = others.map(m => {
+        const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
+        const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+        return `
         <div class="model-card">
             <div class="model-card-header">
                 <span class="model-card-name">${m.name}</span>
@@ -920,14 +984,15 @@ async function loadImageModels() {
                     <span class="badge badge-arch">${m.quality}</span>
                     <span class="badge badge-size">${m.steps} steps</span>
                     <span class="badge badge-size">${m.size}</span>
+                    ${legacyBadge}${typeBadge}
                 </div>
             </div>
             <div class="model-card-desc">${m.desc}</div>
             <div class="model-card-actions">
                 <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 async function selectImageModel(id) {
@@ -1381,6 +1446,7 @@ function closeAllPanels() {
     document.getElementById('modelPanel').classList.remove('active');
     document.getElementById('settingsPanel').classList.remove('active');
     document.getElementById('docsPanel').classList.remove('active');
+    document.getElementById('imageLibraryPanel').classList.remove('active');
     document.getElementById('panelOverlay').classList.remove('active');
 }
 
@@ -1672,3 +1738,270 @@ function _sendAsUser(text) {
     sendMessage();
 }
 
+
+// ── Drag & Drop Image Upload ─────────────────────────────────────
+
+let _pendingImage = null; // {url, path, filename}
+
+function setupDragDrop() {
+    const chatArea = document.getElementById('chatArea');
+    const dropOverlay = document.getElementById('dropOverlay');
+    let dragCounter = 0;
+
+    document.body.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.types.includes('Files')) {
+            dragCounter++;
+            dropOverlay.classList.add('active');
+        }
+    });
+
+    document.body.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
+            dropOverlay.classList.remove('active');
+        }
+    });
+
+    document.body.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    document.body.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropOverlay.classList.remove('active');
+
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            await handleImageUpload(file);
+        }
+    });
+}
+
+function handleImageFileSelect(input) {
+    const file = input.files[0];
+    if (file && file.type.startsWith('image/')) {
+        handleImageUpload(file);
+    }
+    input.value = ''; // Reset so same file can be selected again
+}
+
+async function handleImageUpload(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload-image', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            addSystemMessage(`Upload failed: ${data.detail || 'Unknown error'}`, 'error');
+            return;
+        }
+
+        // Store pending image
+        _pendingImage = {
+            url: data.url,
+            path: data.path,
+            filename: data.filename,
+        };
+
+        // Show in user message with thumbnail
+        addMessage('user',
+            `<div class="chat-image-pending">
+                <img src="${data.url}" alt="${data.filename}">
+                <span>📎 ${data.filename} (${data.size_kb} KB) — attached to next message</span>
+            </div>`
+        );
+
+        // Focus chat input so user can type caption/instruction
+        document.getElementById('chatInput').focus();
+        document.getElementById('chatInput').placeholder = 'Describe what to do with this image, or just send...';
+
+        addSystemMessage(`Image attached. Type your message or press Enter to send.`);
+
+    } catch (e) {
+        addSystemMessage(`Upload failed: ${e.message}`, 'error');
+    }
+}
+
+// ── Image Library ────────────────────────────────────────────────
+
+let _libraryImages = [];
+let _libraryFilter = 'all';
+
+function toggleImageLibrary() {
+    const panel = document.getElementById('imageLibraryPanel');
+    const isOpen = panel.classList.contains('active');
+    closeAllPanels();
+    if (!isOpen) {
+        panel.classList.add('active');
+        document.getElementById('panelOverlay').classList.add('active');
+        loadImageLibrary();
+    }
+}
+
+async function loadImageLibrary() {
+    try {
+        const res = await fetch('/api/image-library');
+        const data = await res.json();
+        _libraryImages = data.images || [];
+
+        document.getElementById('imageLibraryCount').textContent =
+            `${data.total} images`;
+
+        renderLibraryGrid();
+    } catch (e) {
+        console.error('Failed to load image library:', e);
+    }
+}
+
+function filterLibrary(filter, btn) {
+    _libraryFilter = filter;
+    // Update active state
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderLibraryGrid();
+}
+
+function renderLibraryGrid() {
+    const grid = document.getElementById('imageLibraryGrid');
+    const filtered = _libraryFilter === 'all'
+        ? _libraryImages
+        : _libraryImages.filter(img => img.source === _libraryFilter);
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="image-library-empty">No images yet. Generate or upload some!</div>';
+        return;
+    }
+
+    grid.innerHTML = filtered.map(img => {
+        const badge = img.source === 'generated' ? '🎨' : '📎';
+        return `
+            <div class="image-library-card" onclick="viewFullImage('${img.url}')">
+                <img src="${img.url}" alt="${img.filename}" loading="lazy">
+                <span class="image-library-card-badge">${badge}</span>
+                <div class="image-library-card-overlay">
+                    <button onclick="event.stopPropagation(); insertImageToChat('${img.url}', '${img.path}', '${img.filename}')" title="Use in chat">💬</button>
+                    <button onclick="event.stopPropagation(); downloadLibraryImage('${img.url}', '${img.filename}')" title="Download">⬇️</button>
+                    <button onclick="event.stopPropagation(); deleteLibraryImage('${img.filename}')" title="Delete">🗑️</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function insertImageToChat(url, path, filename) {
+    _pendingImage = { url, path, filename };
+    addMessage('user',
+        `<div class="chat-image-pending">
+            <img src="${url}" alt="${filename}">
+            <span>📎 ${filename} — attached to next message</span>
+        </div>`
+    );
+    document.getElementById('chatInput').focus();
+    document.getElementById('chatInput').placeholder = 'Describe what to do with this image...';
+    // Close panel
+    document.getElementById('imageLibraryPanel').classList.remove('active');
+    document.getElementById('panelOverlay').classList.remove('active');
+}
+
+function downloadLibraryImage(url, filename) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+}
+
+async function deleteLibraryImage(filename) {
+    if (!confirm(`Delete ${filename}?`)) return;
+    try {
+        const res = await fetch(`/api/image-library/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+            addSystemMessage(`Deleted ${filename} (${data.freed_kb} KB freed)`);
+            loadImageLibrary();
+        } else {
+            addSystemMessage(data.detail || 'Delete failed', 'error');
+        }
+    } catch (e) {
+        addSystemMessage(`Delete failed: ${e.message}`, 'error');
+    }
+}
+
+// ── Fullsize Image Modal ─────────────────────────────────────────
+
+function viewFullImage(url) {
+    const modal = document.getElementById('imageModal');
+    const img = document.getElementById('imageModalImg');
+    img.src = url;
+    modal.classList.add('active');
+}
+
+function closeImageModal() {
+    document.getElementById('imageModal').classList.remove('active');
+}
+
+// Escape key to close modal
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeImageModal();
+    }
+});
+
+// ── Style Presets ────────────────────────────────────────────────
+
+let _activeStylePreset = localStorage.getItem('birdsnest_style_preset') || 'none';
+let _styleIntensity = parseInt(localStorage.getItem('birdsnest_style_intensity') || '2');
+
+function setStylePreset(style, btn) {
+    _activeStylePreset = style;
+    localStorage.setItem('birdsnest_style_preset', style);
+    // Update chip UI
+    document.querySelectorAll('.style-chip').forEach(c => c.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    saveStyleSettings();
+}
+
+function saveStyleSettings() {
+    _styleIntensity = parseInt(document.getElementById('styleIntensity')?.value || '2');
+    localStorage.setItem('birdsnest_style_intensity', _styleIntensity);
+    // Persist to workspace so tools.py can read it
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            quantize: localStorage.getItem('birdsnest_img_quant') || '8',
+            low_ram: localStorage.getItem('birdsnest_img_lowram') === 'true',
+            style_preset: _activeStylePreset,
+            style_intensity: _styleIntensity,
+        }),
+    }).catch(() => { });
+}
+
+function restoreStyleSettings() {
+    // Restore chip active state
+    const chips = document.querySelectorAll('.style-chip');
+    chips.forEach(c => {
+        c.classList.toggle('active', c.dataset.style === _activeStylePreset);
+    });
+    // Restore intensity slider
+    const slider = document.getElementById('styleIntensity');
+    if (slider) {
+        slider.value = _styleIntensity;
+        const label = document.getElementById('styleIntensityLabel');
+        if (label) label.textContent = ['Subtle', 'Normal', 'Strong'][_styleIntensity - 1];
+    }
+}
+
+// Call restore when image tab loads
+const _origLoadImageModels = loadImageModels;
+loadImageModels = async function () {
+    await _origLoadImageModels();
+    restoreStyleSettings();
+};
