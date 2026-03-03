@@ -18,6 +18,43 @@ import psutil
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, Callable, List
 from pathlib import Path
+import shutil
+
+
+# ── mflux CLI path resolver ───────────────────────────────────────────────────
+
+def _resolve_mflux_cmd(cmd_name: str) -> str:
+    """Find the full path to an mflux CLI command.
+    
+    Checks (in order):
+    1. The ChatRWKV project .venv/bin/
+    2. User-local pip bin (~/.local/bin/)
+    3. Homebrew bin (/opt/homebrew/bin/)
+    4. System PATH via shutil.which
+    """
+    # Project venv (most common for Bird's Nest)
+    project_root = Path(__file__).resolve().parent.parent
+    venv_bin = project_root / ".venv" / "bin" / cmd_name
+    if venv_bin.exists():
+        return str(venv_bin)
+
+    # User-local pip
+    user_bin = Path.home() / ".local" / "bin" / cmd_name
+    if user_bin.exists():
+        return str(user_bin)
+
+    # Homebrew
+    brew_bin = Path("/opt/homebrew/bin") / cmd_name
+    if brew_bin.exists():
+        return str(brew_bin)
+
+    # System PATH
+    found = shutil.which(cmd_name)
+    if found:
+        return found
+
+    # Return bare name as fallback (will fail with clear error)
+    return cmd_name
 
 
 # ── Tool Registry ─────────────────────────────────────────────────────────────
@@ -1701,10 +1738,13 @@ def tool_generate_image(args: Dict) -> str:
 
     steps = args.get("steps", default_steps)
 
+    # Resolve the full path to the mflux CLI command
+    resolved_cmd = _resolve_mflux_cmd(cli_cmd)
+
     # Check if mflux CLI command is available
     try:
         check = subprocess.run(
-            [cli_cmd, "--help"],
+            [resolved_cmd, "--help"],
             capture_output=True, text=True, timeout=5
         )
         if check.returncode != 0:
@@ -1719,7 +1759,7 @@ def tool_generate_image(args: Dict) -> str:
 
     # Build the mflux command
     cmd = [
-        cli_cmd,
+        resolved_cmd,
         "--prompt", prompt,
         "--output", str(filepath),
         "--steps", str(steps),
@@ -1965,9 +2005,10 @@ def tool_upscale_image(args: Dict) -> str:
     out_filepath = IMAGES_DIR / out_filename
 
     # Check if mflux-upscale-seedvr2 is available
+    upscale_cmd = _resolve_mflux_cmd("mflux-upscale-seedvr2")
     try:
         check = subprocess.run(
-            ["mflux-upscale-seedvr2", "--help"],
+            [upscale_cmd, "--help"],
             capture_output=True, text=True, timeout=5
         )
         if check.returncode != 0:
@@ -1980,7 +2021,7 @@ def tool_upscale_image(args: Dict) -> str:
         )
 
     cmd = [
-        "mflux-upscale-seedvr2",
+        upscale_cmd,
         "--image", str(source),
         "--output", str(out_filepath),
     ]
@@ -2068,9 +2109,10 @@ def tool_edit_image(args: Dict) -> str:
     out_filepath = IMAGES_DIR / out_filename
 
     # Check if mflux-generate-flux2-edit is available
+    edit_cmd = _resolve_mflux_cmd("mflux-generate-flux2-edit")
     try:
         check = subprocess.run(
-            ["mflux-generate-flux2-edit", "--help"],
+            [edit_cmd, "--help"],
             capture_output=True, text=True, timeout=5
         )
         if check.returncode != 0:
@@ -2083,7 +2125,7 @@ def tool_edit_image(args: Dict) -> str:
         )
 
     cmd = [
-        "mflux-generate-flux2-edit",
+        edit_cmd,
         "--image", str(source),
         "--prompt", edit_prompt,
         "--output", str(out_filepath),
