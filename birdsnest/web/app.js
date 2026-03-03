@@ -886,6 +886,14 @@ function switchModelTab(tab) {
 // Image model catalog and state now come from server
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || '';
 
+// Helper: build size badge showing download + quantized RAM
+function imgSizeBadge(m) {
+    if (m.q_size_gb && m.q_size_gb < m.size_gb) {
+        return `<span class="badge badge-size">${m.size_gb} GB</span><span class="badge badge-size" style="color:#4ade80">~${m.q_size_gb} GB int4</span>`;
+    }
+    return `<span class="badge badge-size">${m.size_gb} GB</span>`;
+}
+
 async function loadImageModels() {
     let catalog = [];
     let installedRaw = [];
@@ -914,7 +922,7 @@ async function loadImageModels() {
                     <div class="model-card-badges">
                         <span class="badge badge-arch">${active.params || ''}</span>
                         <span class="badge badge-size">${active.steps} steps</span>
-                        <span class="badge badge-size">${active.size_gb} GB</span>
+                        ${imgSizeBadge(active)}
                     </div>
                 </div>
                 <div class="model-card-desc">${active.desc}</div>
@@ -955,7 +963,7 @@ async function loadImageModels() {
                     <div class="model-card-badges">
                         <span class="badge badge-arch">${m.params || ''}</span>
                         <span class="badge badge-size">${m.steps} steps</span>
-                        <span class="badge badge-size">${m.size_gb} GB</span>
+                        ${imgSizeBadge(m)}
                         ${legacyBadge}${typeBadge}
                     </div>
                 </div>
@@ -986,7 +994,7 @@ async function loadImageModels() {
                     <div class="model-card-badges">
                         <span class="badge badge-arch">${m.params || ''}</span>
                         <span class="badge badge-size">${m.steps} steps</span>
-                        <span class="badge badge-size">${m.size_gb} GB</span>
+                        ${imgSizeBadge(m)}
                         ${legacyBadge}${typeBadge}
                     </div>
                 </div>

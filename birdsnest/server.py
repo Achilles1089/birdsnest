@@ -208,6 +208,7 @@ async def list_image_models():
             "name": entry.get("display_name", entry["name"]),
             "desc": entry.get("description", ""),
             "size_gb": entry.get("size_gb", 0),
+            "q_size_gb": entry.get("quantized_size_gb", 0),
             "steps": entry.get("default_steps", 4),
             "params": entry.get("params", ""),
             "hf_repo": hf_repo,
