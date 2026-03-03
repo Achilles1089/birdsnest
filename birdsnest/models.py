@@ -497,12 +497,16 @@ class ModelManager:
         return None
 
     def delete(self, name_or_filename: str) -> Dict[str, Any]:
-        """Delete a model from disk."""
+        """Delete a model from disk (handles both files and directories)."""
         for m in self.list_local():
             if m["name"] == name_or_filename or m["filename"] == name_or_filename:
                 path = m["path"]
                 size = m["size_gb"]
-                os.remove(path)
+                if os.path.isdir(path):
+                    import shutil
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
                 return {"deleted": m["name"], "freed_gb": size}
         return {"error": f"Model not found: {name_or_filename}"}
 
