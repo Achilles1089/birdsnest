@@ -883,80 +883,55 @@ function switchModelTab(tab) {
 }
 
 // ── Image Models (mflux) ──────────────────────────────
-const IMAGE_MODEL_CATALOG = [
-    // ── New Models (recommended) ──
-    {
-        id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐⭐⭐', steps: 9,
-        size: '~8 GB (4-bit)', desc: '★ Fastest — 9 steps, excellent quality',
-        cli: 'mflux-generate-z-image-turbo'
-    },
-    {
-        id: 'flux2-klein-4b', name: 'FLUX.2 Klein 4B', quality: '⭐⭐⭐⭐⭐', steps: 4,
-        size: '~8 GB (q8)', desc: '4 steps, image editing support',
-        cli: 'mflux-generate-flux2'
-    },
-    {
-        id: 'fibo-lite', name: 'FIBO Lite', quality: '⭐⭐⭐⭐', steps: 8,
-        size: '~10 GB (q8)', desc: 'JSON-native prompting, precise control',
-        cli: 'mflux-generate-fibo'
-    },
-    {
-        id: 'seedvr2', name: 'SeedVR2 Upscaler', quality: 'N/A', steps: 1,
-        size: '~4 GB', desc: '1-step upscale — no prompt needed',
-        cli: 'mflux-upscale-seedvr2', type: 'upscaler'
-    },
-    // ── Legacy FLUX.1 ──
-    {
-        id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4,
-        size: '~12 GB (q8)', desc: 'Legacy — 4 steps, good quality', legacy: true
-    },
-    {
-        id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20,
-        size: '~12 GB (q8)', desc: 'Legacy — 20 steps, best FLUX.1 quality', legacy: true
-    },
-];
-
+// Image model catalog and state now come from server
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
 
 async function loadImageModels() {
-    // Fetch installed from server
-    let installed = [];
+    let catalog = [];
+    let installedRaw = [];
     try {
         const res = await fetch('/api/image-models');
         const data = await res.json();
-        installed = data.installed || [];
+        catalog = data.catalog || [];
+        installedRaw = data.installed_raw || [];
         if (data.active) activeImageModel = data.active;
     } catch { }
 
-    // Tab badge
+    // Tab badge — count installed
+    const installedCount = catalog.filter(m => m.installed).length;
     const imgBadge = document.getElementById('badgeImage');
-    if (imgBadge) imgBadge.textContent = installed.length || '';
+    if (imgBadge) imgBadge.textContent = installedCount || '';
 
-    // Active model display
-    const active = IMAGE_MODEL_CATALOG.find(m => m.id === activeImageModel) || IMAGE_MODEL_CATALOG[0];
-    document.getElementById('activeImageModel').innerHTML = `
-        <div class="model-card">
-            <div class="model-card-header">
-                <span class="model-card-name">${active.name}</span>
-                <div class="model-card-badges">
-                    <span class="badge badge-arch">${active.quality}</span>
-                    <span class="badge badge-size">${active.steps} steps</span>
-                    <span class="badge badge-size">${active.size}</span>
+    // ── Active model display ──
+    const active = catalog.find(m => m.id === activeImageModel);
+    const activeSection = document.getElementById('activeImageModel');
+    if (active && active.installed) {
+        activeSection.innerHTML = `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${active.name}</span>
+                    <div class="model-card-badges">
+                        <span class="badge badge-size">${active.steps} steps</span>
+                        <span class="badge badge-size">${active.size_gb} GB</span>
+                    </div>
+                </div>
+                <div class="model-card-desc">${active.desc}</div>
+                <div class="model-card-actions">
+                    <button class="btn btn-danger" onclick="unloadImageModel()">Unload</button>
                 </div>
             </div>
-            <div class="model-card-desc">${active.desc}</div>
-            <div class="model-card-actions">
-                <button class="btn btn-danger" onclick="unloadImageModel()">Unload</button>
-            </div>
-        </div>
-    `;
-    document.getElementById('activeImageModel').className = '';
+        `;
+        activeSection.className = '';
+    } else {
+        activeSection.innerHTML = '<div class="empty-state">No image model selected</div>';
+        activeSection.className = '';
+    }
 
-    // Installed models from HF cache (with delete)
+    // ── Installed (HF Cache) — models with Delete ──
     const installedSection = document.getElementById('imageInstalledList');
     if (installedSection) {
-        installedSection.innerHTML = installed.length > 0
-            ? installed.map(m => `
+        installedSection.innerHTML = installedRaw.length > 0
+            ? installedRaw.map(m => `
                 <div class="model-card">
                     <div class="model-card-header">
                         <span class="model-card-name">${m.id}</span>
@@ -970,29 +945,61 @@ async function loadImageModels() {
             : '<div class="empty-state">No image models cached yet</div>';
     }
 
-    // Available catalog (with select)
+    // ── Available catalog: Downloaded → "Select", Not downloaded → "Download" ──
     const list = document.getElementById('imageModelsList');
-    const others = IMAGE_MODEL_CATALOG.filter(m => m.id !== activeImageModel);
+    const others = catalog.filter(m => m.id !== activeImageModel);
     list.innerHTML = others.map(m => {
         const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
         const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+
+        let actionBtn;
+        if (m.installed) {
+            actionBtn = `<button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>`;
+        } else {
+            actionBtn = `<button class="btn btn-download" onclick="downloadImageModel('${m.id}', this)">Download (${m.size_gb} GB)</button>`;
+        }
+
         return `
         <div class="model-card">
             <div class="model-card-header">
                 <span class="model-card-name">${m.name}</span>
                 <div class="model-card-badges">
-                    <span class="badge badge-arch">${m.quality}</span>
                     <span class="badge badge-size">${m.steps} steps</span>
-                    <span class="badge badge-size">${m.size}</span>
+                    <span class="badge badge-size">${m.size_gb} GB</span>
                     ${legacyBadge}${typeBadge}
                 </div>
             </div>
             <div class="model-card-desc">${m.desc}</div>
             <div class="model-card-actions">
-                <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
+                ${actionBtn}
             </div>
         </div>`;
     }).join('');
+}
+
+async function downloadImageModel(modelId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+
+    try {
+        const res = await fetch('/api/image-models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: modelId }),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            addSystemMessage(`Downloaded ${modelId} (${data.size_gb} GB in ${data.time}s)`);
+            loadImageModels();
+        } else {
+            throw new Error(data.detail || 'Download failed');
+        }
+    } catch (e) {
+        addSystemMessage(`Image model download failed: ${e.message}`, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    }
 }
 
 async function selectImageModel(id) {

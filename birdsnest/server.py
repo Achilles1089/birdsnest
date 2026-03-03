@@ -175,26 +175,86 @@ def _delete_hf_model(dir_name: str):
 
 # ── REST API: Image Models ───────────────────────────────────────────────────
 
-active_image_model = "schnell"
+# Load active image model from config (persist across restarts)
+_img_config = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+active_image_model = _img_config.read_text().strip() if _img_config.exists() else "schnell"
 
-# mflux caches models under ~/.cache/huggingface/hub with prefix "black-forest-labs"
-# Also check for mflux-specific cache dirs
-IMAGE_HF_PREFIXES = ["black-forest-labs", "FLUX", "mflux"]
+from birdsnest.models import IMAGE_MODEL_CATALOG as _IMG_CATALOG
 
 @app.get("/api/image-models")
 async def list_image_models():
-    """Check which Flux/mflux image models are cached locally."""
-    installed = []
-    for prefix in IMAGE_HF_PREFIXES:
-        installed.extend(_scan_hf_cache(prefix))
-    # Deduplicate by dir_name
-    seen = set()
-    unique = []
-    for m in installed:
-        if m["dir_name"] not in seen:
-            seen.add(m["dir_name"])
-            unique.append(m)
-    return {"installed": unique, "active": active_image_model}
+    """Return catalog with installed status + active model."""
+    # Scan HF cache for all downloaded models
+    installed_repos = set()
+    installed_raw = []
+    for prefix in ["black-forest-labs", "FLUX", "mflux", "Tongyi", "briaai", "ByteDance"]:
+        for m in _scan_hf_cache(prefix):
+            if m["dir_name"] not in {x["dir_name"] for x in installed_raw}:
+                installed_raw.append(m)
+                installed_repos.add(m["id"])  # e.g. "Tongyi-MAI/Z-Image-Turbo"
+
+    # Build catalog with installed flags
+    catalog = []
+    for entry in _IMG_CATALOG:
+        hf_repo = entry.get("hf_repo", "")
+        # Check if this model's HF repo is in the cache
+        # HF cache uses -- separator: "models--org--name" → "org/name"
+        is_installed = any(
+            hf_repo.lower() in repo_id.lower() or repo_id.lower() in hf_repo.lower()
+            for repo_id in installed_repos
+        )
+        catalog.append({
+            "id": entry["id"],
+            "name": entry.get("display_name", entry["name"]),
+            "desc": entry.get("description", ""),
+            "size_gb": entry.get("size_gb", 0),
+            "steps": entry.get("default_steps", 4),
+            "hf_repo": hf_repo,
+            "installed": is_installed,
+            "legacy": entry.get("legacy", False),
+            "type": "upscaler" if "upscale" in entry.get("capabilities", []) else "generator",
+        })
+
+    return {"catalog": catalog, "installed_raw": installed_raw, "active": active_image_model}
+
+
+@app.post("/api/image-models/download")
+async def download_image_model(request: Request):
+    """Pre-download an image model from HuggingFace."""
+    data = await request.json()
+    model_id = data.get("model_id", "")
+
+    entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
+    if not entry:
+        raise HTTPException(400, f"Unknown image model: {model_id}")
+
+    hf_repo = entry.get("hf_repo")
+    if not hf_repo:
+        raise HTTPException(400, f"No HF repo for model: {model_id}")
+
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        raise HTTPException(500, "huggingface_hub not installed")
+
+    loop = asyncio.get_running_loop()
+
+    def _download():
+        return snapshot_download(
+            repo_id=hf_repo,
+            local_dir_use_symlinks=True,
+        )
+
+    t0 = time.time()
+    await loop.run_in_executor(None, _download)
+    elapsed = time.time() - t0
+
+    return {
+        "status": "downloaded",
+        "model_id": model_id,
+        "size_gb": entry.get("size_gb", 0),
+        "time": round(elapsed, 1),
+    }
 
 
 @app.post("/api/image-models/select")
@@ -202,7 +262,6 @@ async def select_image_model(request: Request):
     global active_image_model
     data = await request.json()
     active_image_model = data.get("model", "schnell")
-    from pathlib import Path
     config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(active_image_model)
