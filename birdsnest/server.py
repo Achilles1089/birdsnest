@@ -800,16 +800,21 @@ async def websocket_chat(websocket: WebSocket):
             tool_context = ""
             if use_tools:
                 tool_context = build_tool_system_prompt()
-                if tool_context:
-                    tool_context = tool_context + "\n\n"
 
             # Image context injection
             image_context = ""
             if image_path:
-                image_context = f"[User shared an image: {image_path}]\n"
+                image_context = f"[User shared an image: {image_path}] "
 
-            # User prompt: system context + image context + RAG context + user message
-            user_prompt = tool_context + image_context + (rag_context or "") + prompt
+            # Separate system prefix (fed silently into state) from user prompt
+            system_prefix = ""
+            if tool_context:
+                system_prefix += tool_context + "\n\n"
+            if rag_context:
+                system_prefix += rag_context + "\n\n"
+
+            # User prompt is just the actual user message + image context
+            user_prompt = image_context + prompt
 
             # Send start marker — find nickname
             nickname = active_engine.model_name
@@ -850,7 +855,8 @@ async def websocket_chat(websocket: WebSocket):
                     normal_mode_confirmed = False
 
                     for piece in active_engine.generate_stream(
-                        user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens
+                        user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
+                        system_prefix=system_prefix
                     ):
                         if cancel_flag["cancelled"]:
                             was_cancelled = True
@@ -910,7 +916,8 @@ async def websocket_chat(websocket: WebSocket):
                 else:
                     # ── Direct mode: no tool detection ──
                     for piece in active_engine.generate_stream(
-                        user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens
+                        user_prompt, temperature=temperature, top_p=top_p, max_tokens=max_tokens,
+                        system_prefix=system_prefix
                     ):
                         if cancel_flag["cancelled"]:
                             was_cancelled = True

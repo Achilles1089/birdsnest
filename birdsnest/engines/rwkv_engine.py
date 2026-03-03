@@ -469,8 +469,8 @@ class RWKVEngine(InferenceEngine):
             for t in sys_tokens:
                 self._forward(t)
 
-        # Detect G1 thinking model
-        is_g1 = self.model_name and 'g1' in self.model_name.lower() and 'rwkv7' in self.model_name.lower()
+        # Detect thinking model from filename (G1 variants explicitly named)
+        is_g1 = self.model_name and 'g1' in self.model_name.lower()
 
         # Encode and feed the actual user prompt
         if is_g1:
@@ -490,9 +490,15 @@ class RWKVEngine(InferenceEngine):
         # Generate
         all_tokens = []
         import re as _re
-        _stop_pattern = _re.compile(r'\n\s*[Uu]ser\s*[:\!\?]?')
-        # Normalize prompt for echo detection
-        _prompt_norm = prompt.lower().strip()
+
+        # ── Stop conditions ──
+        # 1. "User:" turn boundary — STRICT: requires "User:" with colon at line start
+        #    (prevents false match on thinking content like "the user asked")
+        _stop_pattern = _re.compile(r'\n\s*User\s*:')
+
+        # Track whether model is in a <think> block (any model can produce these)
+        in_thinking = is_g1  # G1 starts in thinking mode
+        thinking_done = False
         
         for _ in range(max_tokens):
             token = self._sample(out, temperature, top_p)
@@ -500,28 +506,53 @@ class RWKVEngine(InferenceEngine):
 
             # Check stop BEFORE yielding
             decoded = self.tokenizer.decode(all_tokens)
+
+            # Track thinking state for ANY model that produces <think> tags
+            if not in_thinking and '<think>' in decoded:
+                in_thinking = True
+            if in_thinking and '</think>' in decoded:
+                in_thinking = False
+                thinking_done = True
+
+            # ── Stop: "User:" turn boundary ──
             stop_match = _stop_pattern.search(decoded)
             if stop_match:
-                # Yield only the text before the stop sequence
-                remaining = decoded[:stop_match.start()]
-                prev_decoded = self.tokenizer.decode(all_tokens[:-1]) if len(all_tokens) > 1 else ""
-                new_text = remaining[len(prev_decoded):]
-                if new_text and '\ufffd' not in new_text:
-                    yield new_text
-                break
-            if decoded.endswith('\n\n') and len(all_tokens) > 50:
-                # For thinking models, only stop on \n\n after </think> has been output
-                if is_g1:
-                    if '</think>' in decoded:
-                        break
-                else:
+                # Don't stop on "User:" inside <think> blocks
+                match_pos = stop_match.start()
+                think_end = decoded.rfind('</think>')
+                if not in_thinking or (think_end >= 0 and match_pos > think_end):
+                    remaining = decoded[:stop_match.start()]
+                    prev_decoded = self.tokenizer.decode(all_tokens[:-1]) if len(all_tokens) > 1 else ""
+                    new_text = remaining[len(prev_decoded):]
+                    if new_text and '\ufffd' not in new_text:
+                        yield new_text
                     break
 
-            # Echo detection — if the model is repeating the user's prompt, stop
-            if len(all_tokens) > 20:
-                gen_norm = decoded.lower().strip()
-                if len(gen_norm) > 20 and _prompt_norm[:30] in gen_norm:
+            # ── Stop: Double newline (paragraph end) ──
+            if decoded.endswith('\n\n') and len(all_tokens) > 100:
+                # Skip during thinking phase — thinking blocks have natural paragraph breaks
+                if not in_thinking:
                     break
+
+            # ── Stop: Triple newline (strong end signal) ──
+            if decoded.endswith('\n\n\n') and len(all_tokens) > 30:
+                if not in_thinking:
+                    break
+
+            # ── Stop: Echo detection (model regurgitating the prompt) ──
+            # Only check after substantial output, and only for PURE echo
+            # (not just mentioning the user's words in context)
+            if len(all_tokens) > 80:
+                gen_norm = decoded.lower().strip()
+                # Remove any thinking tags for comparison
+                clean_gen = _re.sub(r'</?think>', '', gen_norm).strip()
+                # Only trigger if the generated text IS the prompt (pure repetition)
+                # not if it merely contains a reference to the prompt
+                if len(clean_gen) > 50:
+                    # Check if >70% of generated text is just the prompt repeated
+                    prompt_lower = prompt.lower().strip()
+                    if len(prompt_lower) > 10 and clean_gen.count(prompt_lower) >= 2:
+                        break
 
             # Decode just this token and yield
             try:
