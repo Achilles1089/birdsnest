@@ -27,9 +27,14 @@ from birdsnest.tools import (
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent.parent
-MODELS_DIR = BASE_DIR / "models"
 WEB_DIR = Path(__file__).parent / "web"
 DATA_DIR = BASE_DIR / "data"
+
+# In app mode, use ~/birdsnest_models (writable); in dev mode, use repo's models/
+if os.environ.get("BIRDSNEST_APP_MODE"):
+    MODELS_DIR = Path.home() / "birdsnest_models"
+else:
+    MODELS_DIR = BASE_DIR / "models"
 
 # ── Global State ────────────────────────────────────────────────────────────
 model_manager = ModelManager(str(MODELS_DIR))
