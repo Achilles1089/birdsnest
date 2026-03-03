@@ -845,11 +845,14 @@ function switchModelTab(tab) {
 
 // ── Image Models (mflux) ──────────────────────────────
 const IMAGE_MODEL_CATALOG = [
-    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, size: '~23 GB', desc: 'Fast — 4 steps, good quality' },
-    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Best quality — 20 steps' },
-    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Creative style, artistic output' },
-    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, size: '~23 GB', desc: 'Good at text in images' },
-    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, size: '~23 GB', desc: 'Fast alternative to Schnell' },
+    // All FLUX.1 models share the same core (~30 GB for T5+CLIP+VAE, downloaded once).
+    // The transformer weights add ~33 GB at fp32. Total ~63 GB per model.
+    // With int4 quantization, transformer drops to ~6 GB → total ~36 GB.
+    { id: 'schnell', name: 'Flux Schnell', quality: '⭐⭐⭐', steps: 4, size: '~63 GB', desc: 'Fastest — 4 steps, good quality' },
+    { id: 'dev', name: 'Flux Dev', quality: '⭐⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Best quality — 20 steps' },
+    { id: 'krea-dev', name: 'Krea Dev', quality: '⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Creative style, artistic output' },
+    { id: 'qwen', name: 'Qwen Flux', quality: '⭐⭐⭐⭐', steps: 20, size: '~63 GB', desc: 'Good at text in images' },
+    { id: 'z-image-turbo', name: 'Z-Image Turbo', quality: '⭐⭐⭐', steps: 4, size: '~63 GB', desc: 'Speed-optimized, 4-step turbo' },
 ];
 
 let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
