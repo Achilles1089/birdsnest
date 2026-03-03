@@ -27,28 +27,48 @@ def _resolve_mflux_cmd(cmd_name: str) -> str:
     """Find the full path to an mflux CLI command.
     
     Checks (in order):
-    1. The ChatRWKV project .venv/bin/
-    2. User-local pip bin (~/.local/bin/)
-    3. Homebrew bin (/opt/homebrew/bin/)
-    4. System PATH via shutil.which
+    1. The ChatRWKV project .venv/bin/ (via __file__ path)
+    2. The ChatRWKV project .venv/bin/ (common install locations)
+    3. User-local pip bin (~/.local/bin/)
+    4. macOS pip user bin (~/Library/Python/*/bin/)
+    5. Homebrew bin (/opt/homebrew/bin/)
+    6. System PATH via shutil.which
     """
-    # Project venv (most common for Bird's Nest)
+    import sys
+    import glob
+    
+    candidates = []
+    
+    # 1. Project venv via __file__ (works when running from source)
     project_root = Path(__file__).resolve().parent.parent
-    venv_bin = project_root / ".venv" / "bin" / cmd_name
-    if venv_bin.exists():
-        return str(venv_bin)
+    candidates.append(project_root / ".venv" / "bin" / cmd_name)
+    
+    # 2. Known project locations (works when running from .app bundle)
+    #    The .app can't find the venv via __file__ since it resolves to _MEIPASS
+    for scratch_path in [
+        Path.home() / ".gemini" / "antigravity" / "scratch" / "ChatRWKV",
+        Path.home() / "ChatRWKV",
+        Path.home() / "Developer" / "ChatRWKV",
+        Path.home() / "Projects" / "ChatRWKV",
+    ]:
+        candidates.append(scratch_path / ".venv" / "bin" / cmd_name)
 
-    # User-local pip
-    user_bin = Path.home() / ".local" / "bin" / cmd_name
-    if user_bin.exists():
-        return str(user_bin)
+    # 3. User-local pip
+    candidates.append(Path.home() / ".local" / "bin" / cmd_name)
 
-    # Homebrew
-    brew_bin = Path("/opt/homebrew/bin") / cmd_name
-    if brew_bin.exists():
-        return str(brew_bin)
+    # 4. macOS pip user installs (~/Library/Python/3.*/bin/)
+    for pyver_bin in glob.glob(str(Path.home() / "Library" / "Python" / "*" / "bin" / cmd_name)):
+        candidates.append(Path(pyver_bin))
 
-    # System PATH
+    # 5. Homebrew
+    candidates.append(Path("/opt/homebrew/bin") / cmd_name)
+    
+    # Check all candidates
+    for path in candidates:
+        if path.exists():
+            return str(path)
+
+    # 6. System PATH
     found = shutil.which(cmd_name)
     if found:
         return found
