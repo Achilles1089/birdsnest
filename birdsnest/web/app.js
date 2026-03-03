@@ -884,7 +884,7 @@ function switchModelTab(tab) {
 
 // ── Image Models (mflux) ──────────────────────────────
 // Image model catalog and state now come from server
-let activeImageModel = localStorage.getItem('birdsnest_image_model') || 'schnell';
+let activeImageModel = localStorage.getItem('birdsnest_image_model') || '';
 
 async function loadImageModels() {
     let catalog = [];
@@ -897,84 +897,108 @@ async function loadImageModels() {
         if (data.active) activeImageModel = data.active;
     } catch { }
 
-    // Tab badge — count installed
-    const installedCount = catalog.filter(m => m.installed).length;
+    // Tab badge — count downloaded catalog models
+    const downloadedCount = catalog.filter(m => m.installed).length;
     const imgBadge = document.getElementById('badgeImage');
-    if (imgBadge) imgBadge.textContent = installedCount || '';
+    if (imgBadge) imgBadge.textContent = downloadedCount || '';
 
-    // ── Active model display ──
-    const active = catalog.find(m => m.id === activeImageModel);
+    // ── ACTIVE MODEL (matches RWKV "loadedModelSection" pattern) ──
     const activeSection = document.getElementById('activeImageModel');
+    const active = catalog.find(m => m.id === activeImageModel);
     if (active && active.installed) {
+        activeSection.className = '';
         activeSection.innerHTML = `
             <div class="model-card">
                 <div class="model-card-header">
                     <span class="model-card-name">${active.name}</span>
                     <div class="model-card-badges">
+                        <span class="badge badge-arch">${active.params || ''}</span>
                         <span class="badge badge-size">${active.steps} steps</span>
                         <span class="badge badge-size">${active.size_gb} GB</span>
                     </div>
                 </div>
                 <div class="model-card-desc">${active.desc}</div>
                 <div class="model-card-actions">
-                    <button class="btn btn-danger" onclick="unloadImageModel()">Unload</button>
+                    <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
                 </div>
             </div>
         `;
-        activeSection.className = '';
     } else {
-        activeSection.innerHTML = '<div class="empty-state">No image model selected</div>';
-        activeSection.className = '';
+        activeSection.className = 'empty-state';
+        activeSection.textContent = 'No image model selected';
     }
 
-    // ── Installed (HF Cache) — models with Delete ──
+    // ── DOWNLOADED — installed catalog models, not the active one (matches RWKV "localModelsList") ──
+    // These get "Select" + "Delete" — same as RWKV's "Load" + "Delete"
     const installedSection = document.getElementById('imageInstalledList');
-    if (installedSection) {
-        installedSection.innerHTML = installedRaw.length > 0
-            ? installedRaw.map(m => `
-                <div class="model-card">
-                    <div class="model-card-header">
-                        <span class="model-card-name">${m.id}</span>
-                        <span class="badge badge-size" style="color:#4ade80">${m.size_gb} GB</span>
-                    </div>
-                    <div class="model-card-actions">
-                        <button class="btn btn-danger" onclick="deleteHfModel('image', '${m.dir_name}', '${m.id}')">Delete</button>
+    const downloaded = catalog.filter(m => m.installed && m.id !== activeImageModel);
+
+    if (downloaded.length === 0) {
+        installedSection.innerHTML = '<div class="empty-state">No downloaded image models</div>';
+    } else {
+        installedSection.innerHTML = downloaded.map(m => {
+            const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
+            const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+            // Find the matching raw HF cache entry for delete
+            const rawMatch = installedRaw.find(r => {
+                const repoLower = (m.hf_repo || '').toLowerCase();
+                const idLower = (r.id || '').toLowerCase();
+                return repoLower.includes(idLower) || idLower.includes(repoLower.split('/').pop());
+            });
+            const deleteBtn = rawMatch
+                ? `<button class="btn btn-danger" onclick="deleteHfModel('image', '${rawMatch.dir_name}', '${m.name}')">Delete</button>`
+                : '';
+            return `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${m.name}</span>
+                    <div class="model-card-badges">
+                        <span class="badge badge-arch">${m.params || ''}</span>
+                        <span class="badge badge-size">${m.steps} steps</span>
+                        <span class="badge badge-size">${m.size_gb} GB</span>
+                        ${legacyBadge}${typeBadge}
                     </div>
                 </div>
-            `).join('')
-            : '<div class="empty-state">No image models cached yet</div>';
+                <div class="model-card-desc">${m.desc}</div>
+                <div class="model-card-actions">
+                    <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
+                    ${deleteBtn}
+                </div>
+            </div>`;
+        }).join('');
     }
 
-    // ── Available catalog: Downloaded → "Select", Not downloaded → "Download" ──
+    // ── AVAILABLE — catalog models NOT downloaded (matches RWKV "catalogModelsList") ──
+    // These only get "Download (X GB)" button
     const list = document.getElementById('imageModelsList');
-    const others = catalog.filter(m => m.id !== activeImageModel);
-    list.innerHTML = others.map(m => {
-        const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
-        const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+    const notDownloaded = catalog.filter(m => !m.installed);
 
-        let actionBtn;
-        if (m.installed) {
-            actionBtn = `<button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>`;
-        } else {
-            actionBtn = `<button class="btn btn-download" onclick="downloadImageModel('${m.id}', this)">Download (${m.size_gb} GB)</button>`;
-        }
-
-        return `
-        <div class="model-card">
-            <div class="model-card-header">
-                <span class="model-card-name">${m.name}</span>
-                <div class="model-card-badges">
-                    <span class="badge badge-size">${m.steps} steps</span>
-                    <span class="badge badge-size">${m.size_gb} GB</span>
-                    ${legacyBadge}${typeBadge}
+    if (notDownloaded.length === 0) {
+        list.innerHTML = '<div class="empty-state">All image models downloaded!</div>';
+    } else {
+        list.innerHTML = notDownloaded.map(m => {
+            const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
+            const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+            return `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${m.name}</span>
+                    <div class="model-card-badges">
+                        <span class="badge badge-arch">${m.params || ''}</span>
+                        <span class="badge badge-size">${m.steps} steps</span>
+                        <span class="badge badge-size">${m.size_gb} GB</span>
+                        ${legacyBadge}${typeBadge}
+                    </div>
                 </div>
-            </div>
-            <div class="model-card-desc">${m.desc}</div>
-            <div class="model-card-actions">
-                ${actionBtn}
-            </div>
-        </div>`;
-    }).join('');
+                <div class="model-card-desc">${m.desc}</div>
+                <div class="model-card-actions">
+                    <button class="btn btn-download" onclick="downloadImageModel('${m.id}', this)">
+                        Download (${m.size_gb} GB)
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    }
 }
 
 async function downloadImageModel(modelId, btn) {
@@ -1015,14 +1039,14 @@ async function selectImageModel(id) {
 }
 
 async function unloadImageModel() {
-    activeImageModel = 'schnell';
+    activeImageModel = '';
     localStorage.removeItem('birdsnest_image_model');
     await fetch('/api/image-models/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'schnell' }),
+        body: JSON.stringify({ model: '' }),
     }).catch(() => { });
-    addSystemMessage('Image model reset to default (Schnell)');
+    addSystemMessage('Image model unloaded');
     loadImageModels();
 }
 

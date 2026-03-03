@@ -1742,13 +1742,24 @@ def tool_generate_image(args: Dict) -> str:
 
     # ── CLI mapping: each model family has its own mflux command ──
     IMAGE_MODEL_CLI = {
-        # New models (recommended)
+        # Z-Image (6B)
         'z-image-turbo': {'cmd': 'mflux-generate-z-image-turbo', 'default_steps': 9},
+        'z-image':        {'cmd': 'mflux-generate-z-image', 'default_steps': 20},
+        # FLUX.2 Klein (4B/9B)
         'flux2-klein-4b': {'cmd': 'mflux-generate-flux2', 'default_steps': 4, 'args': ['--model-version', '4b']},
-        'fibo-lite':      {'cmd': 'mflux-generate-fibo', 'default_steps': 8, 'args': ['--model-version', 'lite']},
-        # Legacy FLUX.1 models (use generic mflux-generate with --model flag)
+        'flux2-klein-9b': {'cmd': 'mflux-generate-flux2', 'default_steps': 8, 'args': ['--model-version', '9b']},
+        # FIBO (8B)
+        'fibo-lite':      {'cmd': 'mflux-generate-fibo', 'default_steps': 8, 'args': ['--model', 'fibo-lite']},
+        'fibo':           {'cmd': 'mflux-generate-fibo', 'default_steps': 30},
+        # SeedVR2 (3B) — upscaler, not generate
+        'seedvr2':        {'cmd': 'mflux-upscale-seedvr2', 'default_steps': 1, 'is_upscaler': True},
+        # Qwen Image (20B)
+        'qwen-image':     {'cmd': 'mflux-generate-qwen', 'default_steps': 30},
+        # Legacy FLUX.1 (12B)
         'schnell':        {'cmd': 'mflux-generate', 'default_steps': 4, 'args': ['--model', 'schnell']},
         'dev':            {'cmd': 'mflux-generate', 'default_steps': 20, 'args': ['--model', 'dev']},
+        'krea-dev':       {'cmd': 'mflux-generate', 'default_steps': 20, 'args': ['--model', 'krea-dev']},
+        'kontext':        {'cmd': 'mflux-generate-kontext', 'default_steps': 20},
     }
 
     model_info = IMAGE_MODEL_CLI.get(selected_model, IMAGE_MODEL_CLI['schnell'])

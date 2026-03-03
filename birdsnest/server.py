@@ -209,6 +209,7 @@ async def list_image_models():
             "desc": entry.get("description", ""),
             "size_gb": entry.get("size_gb", 0),
             "steps": entry.get("default_steps", 4),
+            "params": entry.get("params", ""),
             "hf_repo": hf_repo,
             "installed": is_installed,
             "legacy": entry.get("legacy", False),
