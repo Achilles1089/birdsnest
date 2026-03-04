@@ -910,6 +910,7 @@ async function loadImageModels() {
         installedRaw = data.installed_raw || [];
         if (data.active) {
             activeImageModel = data.active;
+            localStorage.setItem('birdsnest_image_model', data.active);
             const imgInfo = catalog.find(m => m.id === data.active);
             const imgName = imgInfo ? imgInfo.name : data.active.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             document.getElementById('imgModelLabel').textContent = imgName;
@@ -1339,6 +1340,7 @@ async function loadMusicModels() {
 
     // Sync local state with server
     activeMusicModel = activeId;
+    if (activeId) localStorage.setItem('birdsnest_music_model', activeId);
 
     // Tab badge — count downloaded
     const badge = document.getElementById('badgeMusic');

@@ -460,11 +460,19 @@ async def list_music_models():
         if len(parts) == 2:
             installed_repos.add(f"{parts[0]}/{parts[1]}")
 
-    # Read currently selected model
+    # Read currently selected model (validate against catalog)
     config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_music_model"
     active_id = "stable-audio"
     if config_path.exists():
-        active_id = config_path.read_text().strip() or "stable-audio"
+        stored = config_path.read_text().strip()
+        # Validate against catalog — stale IDs (e.g. MusicGen 'small') get reset
+        valid_ids = {e["id"] for e in MUSIC_MODEL_CATALOG}
+        if stored and stored in valid_ids:
+            active_id = stored
+        elif stored:
+            # Auto-fix stale config
+            config_path.write_text("stable-audio")
+            logger.info(f"Music model config reset: '{stored}' → 'stable-audio' (stale ID)")
 
     catalog = []
     for entry in MUSIC_MODEL_CATALOG:
