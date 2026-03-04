@@ -1928,8 +1928,13 @@ def tool_generate_music(args: Dict) -> str:
 
 def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: str, dtype, timestamp: str) -> str:
     """Generate music using Stable Audio Open pipeline."""
+    import sys
     import torch
     import scipy.io.wavfile
+
+    # Python 3.14 + diffusers VAE decode hits default recursion limit
+    old_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(old_limit, 3000))
 
     from diffusers import StableAudioPipeline
 
@@ -1966,6 +1971,7 @@ def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: st
     del pipe
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
+    sys.setrecursionlimit(old_limit)
 
     return (
         f"🎵 Music generated!\n"
