@@ -19,12 +19,20 @@
             <span class="subtitle">Non-Transformer AI</span>
         </div>
         <div class="header-center">
-            <div class="model-badge" id="modelBadge" onclick="toggleModelPanel()">
-                <span class="model-dot" id="modelDot"></span>
-                <span id="modelLabel">No model loaded</span>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                    <path d="M3 5l3 3 3-3" />
-                </svg>
+            <div class="header-badges">
+                <div class="model-icon-badge" id="llmBadge" onclick="toggleModelPanel('tabLLM')" title="No LLM loaded">
+                    <span class="badge-icon" id="llmIcon">🤖</span>
+                    <span class="quant-dot" id="llmQuant"></span>
+                </div>
+                <div class="model-icon-badge" id="imgBadge" onclick="toggleImageSettingsOrTab()" title="No image model">
+                    <span class="badge-icon" id="imgIcon">🖌️</span>
+                    <span class="quant-dot" id="imgQuant"></span>
+                </div>
+                <div class="model-icon-badge" id="musicBadge" onclick="toggleModelPanel('tabMusic')"
+                    title="No music model">
+                    <span class="badge-icon" id="musicIcon">🔇</span>
+                    <span class="quant-dot" id="musicQuant"></span>
+                </div>
             </div>
         </div>
         <div class="header-right">

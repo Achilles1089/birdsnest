@@ -123,6 +123,74 @@ header h1 {
     box-shadow: 0 0 8px var(--green);
 }
 
+/* ── Iconographic Header Badges ── */
+.header-badges {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.model-icon-badge {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 38px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.4;
+}
+
+.model-icon-badge.active {
+    opacity: 1;
+    border-color: var(--border-bright);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+}
+
+.model-icon-badge:hover {
+    opacity: 1;
+    border-color: var(--border-bright);
+    background: var(--bg-hover);
+}
+
+.badge-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.quant-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background 0.3s;
+}
+
+.quant-dot.full {
+    background: #4ade80;
+}
+
+.quant-dot.int8 {
+    background: #facc15;
+}
+
+.quant-dot.int4 {
+    background: #fb923c;
+}
+
+.quant-dot.int3 {
+    background: #f87171;
+}
+
 .model-dot.loading {
     background: var(--yellow);
     animation: pulse 1s infinite;
