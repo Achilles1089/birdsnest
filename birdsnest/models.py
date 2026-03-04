@@ -531,6 +531,35 @@ IMAGE_MODEL_CATALOG = [
     },
 ]
 
+# ── Music Model Catalog ─────────────────────────────────────────────────────
+
+MUSIC_MODEL_CATALOG = [
+    {
+        "id": "stable-audio",
+        "name": "Stable Audio Open",
+        "display_name": "Stable Audio Open 🎵",
+        "engine": "stable-audio",
+        "hf_repo": "stabilityai/stable-audio-open-1.0",
+        "size_gb": 1.2,
+        "max_duration": 47,
+        "sample_rate": 44100,
+        "description": "High-quality music & sound effects — up to 47s, 44.1kHz",
+    },
+    {
+        "id": "riffusion",
+        "name": "Riffusion",
+        "display_name": "Riffusion 🎸",
+        "engine": "riffusion",
+        "hf_repo": "riffusion/riffusion-model-v1",
+        "size_gb": 1.7,
+        "max_duration": 5,
+        "sample_rate": 44100,
+        "description": "Spectrogram-based music — creative & experimental, ~5s clips",
+    },
+]
+
+_MUSIC_CATALOG = {m["id"]: m for m in MUSIC_MODEL_CATALOG}
+
 
 class ModelManager:
     """Manages local models folder and HuggingFace downloads."""

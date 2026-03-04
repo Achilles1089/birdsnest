@@ -448,25 +448,72 @@ async def delete_library_image(filename: str):
 
 @app.get("/api/music-models")
 async def list_music_models():
-    """Check which MusicGen models are cached locally."""
-    installed = _scan_hf_cache("facebook--musicgen")
-    return {"installed": installed}
+    """List music models with installed status from catalog."""
+    from birdsnest.models import MUSIC_MODEL_CATALOG
+    installed = _scan_hf_cache("stabilityai--stable-audio")
+    installed.extend(_scan_hf_cache("riffusion"))
+
+    installed_repos = set()
+    for m in installed:
+        # Extract repo from dir_name (e.g. "models--stabilityai--stable-audio-open-1.0")
+        parts = m["dir_name"].replace("models--", "").split("--", 1)
+        if len(parts) == 2:
+            installed_repos.add(f"{parts[0]}/{parts[1]}")
+
+    # Read currently selected model
+    config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_music_model"
+    active_id = "stable-audio"
+    if config_path.exists():
+        active_id = config_path.read_text().strip() or "stable-audio"
+
+    catalog = []
+    for entry in MUSIC_MODEL_CATALOG:
+        catalog.append({
+            "id": entry["id"],
+            "name": entry.get("display_name", entry["name"]),
+            "engine": entry["engine"],
+            "hf_repo": entry["hf_repo"],
+            "size_gb": entry.get("size_gb"),
+            "max_duration": entry.get("max_duration"),
+            "description": entry.get("description", ""),
+            "installed": entry["hf_repo"] in installed_repos,
+        })
+
+    return {"catalog": catalog, "installed": installed, "active": active_id}
 
 
 @app.post("/api/music-models/select")
 async def select_music_model(request: Request):
     data = await request.json()
-    model_size = data.get("model", "small")
-    from pathlib import Path
+    model_id = data.get("model", "stable-audio")
     config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_music_model"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(model_size)
-    return {"success": True, "model": model_size}
+    config_path.write_text(model_id)
+    return {"success": True, "model": model_id}
+
+
+@app.post("/api/music-models/download")
+async def download_music_model(request: Request):
+    """Download a music model from HuggingFace."""
+    from birdsnest.models import _MUSIC_CATALOG
+    data = await request.json()
+    model_id = data.get("model")
+    entry = _MUSIC_CATALOG.get(model_id)
+    if not entry:
+        return {"status": "error", "message": f"Unknown music model: {model_id}"}
+    try:
+        from huggingface_hub import snapshot_download
+        t0 = time.time()
+        snapshot_download(entry["hf_repo"])
+        elapsed = time.time() - t0
+        return {"status": "downloaded", "model": model_id, "time": round(elapsed, 1)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.delete("/api/music-models/{dir_name}")
 async def delete_music_model(dir_name: str):
-    """Delete a cached MusicGen model from HF hub cache."""
+    """Delete a cached music model from HF hub cache."""
     return _delete_hf_model(dir_name)
 
 

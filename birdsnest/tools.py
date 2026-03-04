@@ -500,10 +500,23 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
     if trans_m and 'translate' in _tools and _tools['translate'].enabled:
         return ('translate', {'text': trans_m.group(1).strip().strip('"\''), 'to': trans_m.group(2).strip()})
 
+    # ── Music Generation (MUST be before Image — more specific match) ──
+    music_patterns = [
+        (r'(?:generate|create|make|compose|produce) (?:a |some )?(?:music|song|beat|melody|track|tune) (?:of |about |with |like |that sounds like )?(.+)', 1),
+        (r'(?:generate|create|make|compose|produce) (?:a |some )?(.+?)(?:music|song|beat|melody|track|tune)', 1),
+        (r'play (?:me )?(?:a |some )?(.+?)(?:music|song|beat)', 1),
+    ]
+    for pattern, group in music_patterns:
+        m = re.search(pattern, msg)
+        if m and 'generate_music' in _tools and _tools['generate_music'].enabled:
+            prompt = m.group(group).strip().rstrip('.')
+            if prompt and len(prompt) > 3:
+                return ('generate_music', {'prompt': prompt})
+
     # ── Image Generation ──
     img_patterns = [
         (r'(?:generate|create|make|draw|paint) (?:an? )?(?:image|picture|photo|art|illustration) (?:of |about |showing )?(.+)', 1),
-        (r'(?:generate|create|make|draw|paint) (.+)', 1),
+        (r'(?:generate|create|make|draw|paint) (?!(?:a |some )?(?:music|song|beat|melody|track|tune))(.+)', 1),
         (r'imagine (.+)', 1),
     ]
     for pattern, group in img_patterns:
@@ -558,19 +571,6 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
         m = re.search(pattern, msg)
         if m and 'query_database' in _tools and _tools['query_database'].enabled:
             return ('query_database', {'db_path': m.group(path_group).strip(), 'query': m.group(query_group).strip()})
-
-    # ── Music Generation ──
-    music_patterns = [
-        (r'(?:generate|create|make|compose|produce) (?:a |some )?(?:music|song|beat|melody|track|tune) (?:of |about |with |like |that sounds like )?(.+)', 1),
-        (r'(?:generate|create|make|compose|produce) (?:a |some )?(.+?)(?:music|song|beat|melody|track|tune)', 1),
-        (r'play (?:me )?(?:a |some )?(.+?)(?:music|song|beat)', 1),
-    ]
-    for pattern, group in music_patterns:
-        m = re.search(pattern, msg)
-        if m and 'generate_music' in _tools and _tools['generate_music'].enabled:
-            prompt = m.group(group).strip().rstrip('.')
-            if prompt and len(prompt) > 3:
-                return ('generate_music', {'prompt': prompt})
 
     return None
 
@@ -1867,86 +1867,214 @@ def tool_query_database(args: Dict) -> str:
 
 @register_tool(
     "generate_music",
-    "Generate music from a text description using MusicGen",
+    "Generate music from a text description using Stable Audio Open or Riffusion",
     {
         "type": "object",
         "properties": {
             "prompt": {"type": "string", "description": "Description of the music to generate"},
-            "duration": {"type": "number", "description": "Duration in seconds (default 8, max 30)"},
+            "duration": {"type": "number", "description": "Duration in seconds (default 8, max 47 for Stable Audio, 5 for Riffusion)"},
         },
         "required": ["prompt"],
     },
 )
 def tool_generate_music(args: Dict) -> str:
     prompt = args.get("prompt", "")
-    duration = min(args.get("duration", 8), 30)
+    duration = args.get("duration", 8)
 
     if not prompt:
         return "Error: No music prompt provided"
 
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"music_{timestamp}.wav"
-    filepath = WORKSPACE_DIR / filename
 
-    # Read selected model size
+    # Read selected music model
     model_config = WORKSPACE_DIR / ".birdsnest_music_model"
-    model_size = "small"
+    model_id = "stable-audio"  # default
     if model_config.exists():
-        model_size = model_config.read_text().strip() or "small"
+        model_id = model_config.read_text().strip() or "stable-audio"
 
-    model_name = f"facebook/musicgen-{model_size}"
+    from birdsnest.models import _MUSIC_CATALOG
+    entry = _MUSIC_CATALOG.get(model_id)
+    if not entry:
+        return f"Error: Unknown music model '{model_id}'. Available: {list(_MUSIC_CATALOG.keys())}"
+
+    engine = entry["engine"]
+    duration = min(duration, entry.get("max_duration", 30))
 
     try:
         import torch
-        from transformers import AutoProcessor, MusicgenForConditionalGeneration
+        import numpy as np
         import scipy.io.wavfile
 
         t0 = time.time()
-
-        # Load model on MPS (Apple Silicon) or CPU
         device = "mps" if torch.backends.mps.is_available() else "cpu"
-        processor = AutoProcessor.from_pretrained(model_name)
-        model = MusicgenForConditionalGeneration.from_pretrained(model_name).to(device)
+        dtype = torch.float16 if device == "mps" else torch.float32
 
-        # Set generation length (256 tokens ≈ 5s at 32kHz)
-        tokens_per_second = 50  # approximate
-        max_tokens = int(duration * tokens_per_second)
+        if engine == "stable-audio":
+            return _generate_stable_audio(prompt, duration, entry, device, dtype, timestamp)
+        elif engine == "riffusion":
+            return _generate_riffusion(prompt, duration, entry, device, dtype, timestamp)
+        else:
+            return f"Error: Unknown music engine '{engine}'"
 
-        inputs = processor(
-            text=[prompt],
-            padding=True,
-            return_tensors="pt",
-        ).to(device)
-
-        audio_values = model.generate(**inputs, max_new_tokens=max_tokens)
-        audio_data = audio_values[0, 0].cpu().numpy()
-
-        # Save as WAV
-        sample_rate = model.config.audio_encoder.sampling_rate
-        scipy.io.wavfile.write(str(filepath), rate=sample_rate, data=audio_data)
-
-        elapsed = time.time() - t0
-        size_kb = filepath.stat().st_size / 1024
-
+    except ImportError as e:
         return (
-            f"🎵 Music generated!\n"
-            f"Prompt: {prompt}\n"
-            f"Model: {model_name}\n"
-            f"Duration: ~{duration}s\n"
-            f"Size: {size_kb:.0f} KB\n"
-            f"Time: {elapsed:.1f}s\n"
-            f"Audio URL: /workspace/{filename}"
-        )
-
-    except ImportError:
-        return (
-            "MusicGen dependencies not installed.\n"
-            "Install with: pip install transformers torch scipy\n"
-            "First run will download the MusicGen model (~500MB for small)."
+            f"Music generation dependencies not installed: {e}\n"
+            "Install with: pip install diffusers torch scipy numpy"
         )
     except Exception as e:
         return f"Music generation error: {str(e)}"
+
+
+def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: str, dtype, timestamp: str) -> str:
+    """Generate music using Stable Audio Open pipeline."""
+    import torch
+    import scipy.io.wavfile
+
+    from diffusers import StableAudioPipeline
+
+    filename = f"music_{timestamp}.wav"
+    filepath = WORKSPACE_DIR / filename
+
+    t0 = time.time()
+
+    pipe = StableAudioPipeline.from_pretrained(
+        entry["hf_repo"],
+        torch_dtype=dtype,
+    ).to(device)
+
+    audio = pipe(
+        prompt,
+        negative_prompt="low quality, distorted",
+        num_inference_steps=100,
+        audio_end_in_s=duration,
+    ).audios[0]
+
+    # audio is a numpy array, save as WAV
+    sample_rate = entry.get("sample_rate", 44100)
+    # Normalize to int16 range
+    audio_int16 = (audio * 32767).astype("int16")
+    if audio_int16.ndim > 1:
+        audio_int16 = audio_int16[0]  # Take first channel if stereo
+
+    scipy.io.wavfile.write(str(filepath), rate=sample_rate, data=audio_int16)
+
+    elapsed = time.time() - t0
+    size_kb = filepath.stat().st_size / 1024
+
+    # Clean up pipeline
+    del pipe
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+
+    return (
+        f"🎵 Music generated!\n"
+        f"Prompt: {prompt}\n"
+        f"Model: {entry['name']}\n"
+        f"Duration: ~{duration}s\n"
+        f"Size: {size_kb:.0f} KB\n"
+        f"Time: {elapsed:.1f}s\n"
+        f"Audio URL: /workspace/{filename}"
+    )
+
+
+def _generate_riffusion(prompt: str, duration: float, entry: dict, device: str, dtype, timestamp: str) -> str:
+    """Generate music using Riffusion (spectrogram → audio)."""
+    import torch
+    import numpy as np
+    import scipy.io.wavfile
+
+    from diffusers import StableDiffusionPipeline
+
+    filename = f"music_{timestamp}.wav"
+    filepath = WORKSPACE_DIR / filename
+    spec_filename = f"spectrogram_{timestamp}.png"
+    spec_filepath = WORKSPACE_DIR / spec_filename
+
+    t0 = time.time()
+
+    pipe = StableDiffusionPipeline.from_pretrained(
+        entry["hf_repo"],
+        torch_dtype=dtype,
+    ).to(device)
+
+    # Generate spectrogram image
+    image = pipe(prompt, num_inference_steps=30, width=512, height=512).images[0]
+    image.save(str(spec_filepath))
+
+    # Convert spectrogram to audio via inverse STFT
+    spec_array = np.array(image.convert("L")).astype(np.float32) / 255.0
+    # Simple spectrogram → audio via Griffin-Lim approximation
+    n_fft = 1024
+    hop_length = 256
+    n_freq = spec_array.shape[0]
+
+    # Resize spectrogram to match FFT bins
+    from PIL import Image
+    spec_resized = np.array(Image.fromarray((spec_array * 255).astype(np.uint8)).resize(
+        (spec_array.shape[1], n_fft // 2 + 1)
+    )).astype(np.float32) / 255.0
+
+    # Convert to magnitude spectrogram (dB scale → linear)
+    magnitude = np.power(10, spec_resized * 3) - 1  # rough dB inversion
+
+    # Griffin-Lim algorithm
+    n_iter = 32
+    angles = np.exp(2j * np.pi * np.random.rand(*magnitude.shape))
+    for _ in range(n_iter):
+        stft = magnitude * angles
+        # Pad to full FFT size
+        full_stft = np.zeros((n_fft, stft.shape[1]), dtype=complex)
+        full_stft[:stft.shape[0]] = stft
+        # Inverse FFT per frame
+        frames = np.real(np.fft.ifft(full_stft, axis=0))
+        # Overlap-add
+        audio_len = (stft.shape[1] - 1) * hop_length + n_fft
+        audio = np.zeros(audio_len)
+        for i in range(stft.shape[1]):
+            start = i * hop_length
+            audio[start:start + n_fft] += frames[:, i]
+        # Re-analyze
+        for i in range(stft.shape[1]):
+            start = i * hop_length
+            frame = audio[start:start + n_fft]
+            fft_frame = np.fft.fft(frame)[:stft.shape[0]]
+            angles = np.exp(1j * np.angle(fft_frame)).reshape(-1, 1) if i == 0 else \
+                np.column_stack([angles_list, np.exp(1j * np.angle(fft_frame))])
+        # Rebuild angles matrix
+        angles_list = []
+        for i in range(stft.shape[1]):
+            start = i * hop_length
+            frame = audio[start:start + n_fft]
+            fft_frame = np.fft.fft(frame)[:stft.shape[0]]
+            angles_list.append(np.exp(1j * np.angle(fft_frame)))
+        angles = np.column_stack(angles_list)
+
+    # Normalize and save
+    audio = audio / (np.max(np.abs(audio)) + 1e-8)
+    audio_int16 = (audio * 32767).astype(np.int16)
+
+    sample_rate = entry.get("sample_rate", 44100)
+    scipy.io.wavfile.write(str(filepath), rate=sample_rate, data=audio_int16)
+
+    elapsed = time.time() - t0
+    size_kb = filepath.stat().st_size / 1024
+
+    # Clean up pipeline
+    del pipe
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+
+    return (
+        f"🎵 Music generated!\n"
+        f"Prompt: {prompt}\n"
+        f"Model: {entry['name']}\n"
+        f"Duration: ~{duration}s\n"
+        f"Size: {size_kb:.0f} KB\n"
+        f"Time: {elapsed:.1f}s\n"
+        f"Spectrogram: /workspace/{spec_filename}\n"
+        f"Audio URL: /workspace/{filename}"
+    )
 
 
 @register_tool(

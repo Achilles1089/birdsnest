@@ -1174,14 +1174,14 @@ async function warmImageEngine() {
 }
 
 async function unloadMusicModel() {
-    activeMusicModel = 'small';
+    activeMusicModel = '';
     localStorage.removeItem('birdsnest_music_model');
     await fetch('/api/music-models/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'small' }),
+        body: JSON.stringify({ model: '' }),
     }).catch(() => { });
-    addSystemMessage('Music model reset to default (Small)');
+    addSystemMessage('Music model unloaded');
     loadMusicModels();
 }
 
@@ -1318,83 +1318,136 @@ async function deleteTranslationModel(pair, displayName) {
     }
 }
 
-// ── Music Models (MusicGen) ──────────────────────────
-const MUSIC_MODEL_CATALOG = [
-    { id: 'small', name: 'MusicGen Small', size: '500 MB', quality: '⭐⭐⭐', desc: 'Fast, good for prototyping' },
-    { id: 'medium', name: 'MusicGen Medium', size: '1.5 GB', quality: '⭐⭐⭐⭐', desc: 'Better quality, balanced speed' },
-    { id: 'large', name: 'MusicGen Large', size: '3.3 GB', quality: '⭐⭐⭐⭐⭐', desc: 'Best quality, slower' },
-];
+// ── Music Models (Stable Audio + Riffusion) ─────────
 
-let activeMusicModel = localStorage.getItem('birdsnest_music_model') || 'small';
+const MUSIC_ENGINE_GROUPS = {
+    'stable-audio': { label: 'Stable Audio', icon: '🎵', color: '#818cf8', desc: 'High-quality music & sound effects' },
+    'riffusion': { label: 'Riffusion', icon: '🎸', color: '#f472b6', desc: 'Spectrogram-based creative audio' },
+};
+
+let activeMusicModel = localStorage.getItem('birdsnest_music_model') || '';
 
 async function loadMusicModels() {
-    // Fetch installed from server
-    let installed = [];
+    let catalog = [], installed = [], activeId = '';
     try {
         const res = await fetch('/api/music-models');
         const data = await res.json();
+        catalog = data.catalog || [];
         installed = data.installed || [];
+        activeId = data.active || '';
     } catch { }
 
-    // Tab badge
+    // Sync local state with server
+    activeMusicModel = activeId;
+
+    // Tab badge — count downloaded
     const badge = document.getElementById('badgeMusic');
-    if (badge) badge.textContent = installed.length || '';
+    const downloadedCount = catalog.filter(m => m.installed).length;
+    if (badge) badge.textContent = downloadedCount || '';
 
-    // Active model display
-    const active = MUSIC_MODEL_CATALOG.find(m => m.id === activeMusicModel) || MUSIC_MODEL_CATALOG[0];
-    document.getElementById('activeMusicModel').innerHTML = `
-        <div class="model-card">
-            <div class="model-card-header">
-                <span class="model-card-name">${active.name}</span>
-                <div class="model-card-badges">
-                    <span class="badge badge-arch">${active.quality}</span>
-                    <span class="badge badge-size">${active.size}</span>
-                </div>
-            </div>
-            <div class="model-card-desc">${active.desc}</div>
-            <div class="model-card-actions">
-                <button class="btn btn-danger" onclick="unloadMusicModel()">Unload</button>
-            </div>
-        </div>
-    `;
-    document.getElementById('activeMusicModel').className = '';
+    // Helper: render a music card
+    function musicCard(m, mode) {
+        const sizeBadge = m.size_gb ? `<span class="badge">${m.size_gb} GB</span>` : '';
+        const durBadge = m.max_duration ? `<span class="badge badge-size">${m.max_duration}s max</span>` : '';
 
-    // Installed from HF cache (with delete)
-    const installedSection = document.getElementById('musicInstalledList');
-    if (installedSection) {
-        installedSection.innerHTML = installed.length > 0
-            ? installed.map(m => `
-                <div class="model-card">
-                    <div class="model-card-header">
-                        <span class="model-card-name">${m.id}</span>
-                        <span class="badge badge-size" style="color:#4ade80">${m.size_gb} GB</span>
-                    </div>
-                    <div class="model-card-actions">
-                        <button class="btn btn-danger" onclick="deleteHfModel('music', '${m.dir_name}', '${m.id}')">Delete</button>
-                    </div>
+        let actions = '';
+        if (mode === 'loaded') {
+            actions = `<button class="btn btn-secondary" onclick="unloadMusicModel()">Unload</button>`;
+        } else if (mode === 'downloaded') {
+            actions = `
+                <button class="btn btn-primary" onclick="selectMusicModel('${m.id}')">Select</button>
+                <button class="btn btn-danger" onclick="deleteMusicModel('${m.id}')">Delete</button>`;
+        } else {
+            actions = `<button class="btn btn-download" onclick="downloadMusicModel('${m.id}')">Download (${m.size_gb || '?'} GB)</button>`;
+        }
+
+        return `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${m.name}</span>
+                    <div class="model-card-badges">${durBadge}${sizeBadge}</div>
                 </div>
-            `).join('')
-            : '<div class="empty-state">No MusicGen models cached</div>';
+                <div class="model-card-desc">${m.description || ''}</div>
+                <div class="model-card-actions">${actions}</div>
+            </div>`;
     }
 
-    // Available catalog
-    const list = document.getElementById('musicModelsList');
-    const others = MUSIC_MODEL_CATALOG.filter(m => m.id !== activeMusicModel);
-    list.innerHTML = others.map(m => `
-        <div class="model-card">
-            <div class="model-card-header">
-                <span class="model-card-name">${m.name}</span>
-                <div class="model-card-badges">
-                    <span class="badge badge-arch">${m.quality}</span>
-                    <span class="badge badge-size">${m.size}</span>
+    // Helper: group cards by engine into collapsible <details>
+    function renderGroups(models, mode) {
+        const byEngine = {};
+        models.forEach(m => {
+            const eng = m.engine || 'unknown';
+            if (!byEngine[eng]) byEngine[eng] = [];
+            byEngine[eng].push(m);
+        });
+
+        let html = '';
+        for (const [eng, items] of Object.entries(byEngine)) {
+            const g = MUSIC_ENGINE_GROUPS[eng] || { label: eng, icon: '🎵', color: '#888', desc: '' };
+            html += `
+                <div class="arch-group">
+                    <div class="arch-header">
+                        <span class="arch-dot" style="background:${g.color}"></span>
+                        <span class="arch-label">${g.label}</span>
+                        <span class="arch-type">${eng.toUpperCase()}</span>
+                    </div>
+                    <div class="arch-desc">${g.desc}</div>
+                    <details class="model-subgroup" open>
+                        <summary class="subgroup-header">${g.icon} ${g.label} Models <span class="subgroup-count">${items.length}</span></summary>
+                        <div class="subgroup-content">
+                            ${items.map(m => musicCard(m, mode)).join('')}
+                        </div>
+                    </details>
+                </div>`;
+        }
+        return html;
+    }
+
+    // ── LOADED section ──
+    const activeSection = document.getElementById('activeMusicModel');
+    const active = catalog.find(m => m.id === activeId);
+    if (active) {
+        const notDownloadedNote = !active.installed
+            ? `<div class="model-card-desc" style="color:var(--yellow)">⚠ Will auto-download on first generation</div>`
+            : '';
+        activeSection.className = '';
+        activeSection.innerHTML = `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${active.name}</span>
+                    <div class="model-card-badges">
+                        ${active.max_duration ? `<span class="badge badge-size">${active.max_duration}s max</span>` : ''}
+                        ${active.size_gb ? `<span class="badge">${active.size_gb} GB</span>` : ''}
+                    </div>
                 </div>
-            </div>
-            <div class="model-card-desc">${m.desc}</div>
-            <div class="model-card-actions">
-                <button class="btn btn-primary" onclick="selectMusicModel('${m.id}')">Select</button>
-            </div>
-        </div>
-    `).join('');
+                <div class="model-card-desc">${active.description || ''}</div>
+                ${notDownloadedNote}
+                <div class="model-card-actions">
+                    <button class="btn btn-secondary" onclick="unloadMusicModel()">Unload</button>
+                </div>
+            </div>`;
+    } else {
+        activeSection.className = 'empty-state';
+        activeSection.textContent = 'No music model loaded';
+    }
+
+    // ── DOWNLOADED section ──
+    const downloadedModels = catalog.filter(m => m.installed && m.id !== activeId);
+    const dlSection = document.getElementById('musicInstalledList');
+    if (downloadedModels.length > 0) {
+        dlSection.innerHTML = renderGroups(downloadedModels, 'downloaded');
+    } else {
+        dlSection.innerHTML = '<div class="empty-state">No downloaded music models</div>';
+    }
+
+    // ── AVAILABLE section ──
+    const availableModels = catalog.filter(m => !m.installed);
+    const avSection = document.getElementById('musicModelsList');
+    if (availableModels.length > 0) {
+        avSection.innerHTML = renderGroups(availableModels, 'available');
+    } else {
+        avSection.innerHTML = '<div class="empty-state">All music models downloaded!</div>';
+    }
 }
 
 async function selectMusicModel(id) {
@@ -1405,6 +1458,44 @@ async function selectMusicModel(id) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: id }),
     }).catch(() => { });
+    loadMusicModels();
+}
+
+async function downloadMusicModel(id) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+    try {
+        const res = await fetch('/api/music-models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: id }),
+        });
+        const data = await res.json();
+        if (data.status === 'downloaded') {
+            addSystemMessage(`✅ Music model downloaded in ${data.time}s`);
+        } else {
+            addSystemMessage(`⚠️ Download failed: ${data.message}`);
+        }
+    } catch (e) {
+        addSystemMessage(`⚠️ Download error: ${e.message}`);
+    }
+    loadMusicModels();
+}
+
+async function deleteMusicModel(id) {
+    // Find the dir_name in installed list from last fetch
+    try {
+        const res = await fetch('/api/music-models');
+        const data = await res.json();
+        const entry = (data.catalog || []).find(m => m.id === id);
+        const installed = data.installed || [];
+        const match = installed.find(m => m.id.includes(entry?.hf_repo?.split('/')[1] || ''));
+        if (match) {
+            await fetch(`/api/music-models/${match.dir_name}`, { method: 'DELETE' });
+            addSystemMessage(`🗑️ Deleted music model: ${id}`);
+        }
+    } catch { }
     loadMusicModels();
 }
 
