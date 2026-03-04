@@ -876,9 +876,65 @@ function toggleModelPanel(tabId) {
 }
 
 function toggleImageSettingsOrTab() {
-    // For now, open model panel to image tab
-    // Feature 2 will add flanking settings panels here
-    toggleModelPanel('tabImage');
+    const left = document.getElementById('imgSettingsLeft');
+    const right = document.getElementById('imgSettingsRight');
+    const isOpen = left.classList.contains('active');
+    if (isOpen) {
+        left.classList.remove('active');
+        right.classList.remove('active');
+    } else {
+        left.classList.add('active');
+        right.classList.add('active');
+        // Sync UI with saved values
+        const w = localStorage.getItem('birdsnest_img_width') || '1024';
+        const h = localStorage.getItem('birdsnest_img_height') || '1024';
+        document.getElementById('imgWidthSlider').value = w;
+        document.getElementById('imgWidthVal').textContent = w;
+        document.getElementById('imgHeightSlider').value = h;
+        document.getElementById('imgHeightVal').textContent = h;
+        document.getElementById('imgDimSummary').textContent = w + ' × ' + h;
+        const q = localStorage.getItem('birdsnest_img_quant') || '8';
+        document.getElementById('imgSettingsQuant').value = q;
+        const lr = localStorage.getItem('birdsnest_img_lowram') === 'true';
+        document.getElementById('imgSettingsLowRam').checked = lr;
+    }
+}
+
+function setImageWidth(v) {
+    localStorage.setItem('birdsnest_img_width', v);
+    document.getElementById('imgWidthVal').textContent = v;
+    const h = document.getElementById('imgHeightSlider').value;
+    document.getElementById('imgDimSummary').textContent = v + ' × ' + h;
+    updateHeaderBadges();
+    // Send to server
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ width: parseInt(v), height: parseInt(h) }),
+    }).catch(() => { });
+}
+
+function setImageHeight(v) {
+    localStorage.setItem('birdsnest_img_height', v);
+    document.getElementById('imgHeightVal').textContent = v;
+    const w = document.getElementById('imgWidthSlider').value;
+    document.getElementById('imgDimSummary').textContent = w + ' × ' + v;
+    updateHeaderBadges();
+    // Send to server
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ width: parseInt(w), height: parseInt(v) }),
+    }).catch(() => { });
+}
+
+function setImageLowRam(checked) {
+    localStorage.setItem('birdsnest_img_lowram', checked);
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ low_ram: checked }),
+    }).catch(() => { });
 }
 
 // ── Iconographic Header Badge System ──────────────────

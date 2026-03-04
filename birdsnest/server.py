@@ -44,6 +44,7 @@ model_manager = ModelManager(str(MODELS_DIR))
 active_engine: Optional[InferenceEngine] = None
 rag_enabled = False
 tools_enabled = True  # Tool calling on by default
+_last_llm_config = Path.home() / "birdsnest_workspace" / ".birdsnest_last_llm"
 
 try:
     from birdsnest.rag import RAGPipeline
@@ -84,6 +85,32 @@ async def lifespan(app: FastAPI):
     print(f"📦 Models dir: {MODELS_DIR}")
     print(f"🌐 Web UI: http://localhost:7861")
     print(f"📡 API docs: http://localhost:7861/docs\n")
+
+    # ── Auto-load last LLM model ──
+    if _last_llm_config.exists():
+        last_model = _last_llm_config.read_text().strip()
+        if last_model:
+            import threading
+            def _auto_load():
+                global active_engine
+                try:
+                    path = model_manager.get_model_path(last_model)
+                    if not path:
+                        print(f"   ⚠️  Last model '{last_model}' not found, skipping auto-load")
+                        return
+                    local = model_manager.list_local()
+                    arch = "rwkv"
+                    for m in local:
+                        if m["path"] == path:
+                            arch = m["architecture"]
+                            break
+                    active_engine = get_engine_for_arch(arch)
+                    active_engine.load(path)
+                    print(f"   ✅ Auto-loaded last model: {last_model}")
+                except Exception as e:
+                    print(f"   ⚠️  Auto-load failed: {e}")
+            threading.Thread(target=_auto_load, daemon=True).start()
+
     yield
     # Cleanup
     global active_engine
@@ -180,6 +207,7 @@ _img_config = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
 active_image_model = _img_config.read_text().strip() if _img_config.exists() else "schnell"
 
 from birdsnest.models import IMAGE_MODEL_CATALOG as _IMG_CATALOG
+
 
 @app.get("/api/image-models")
 async def list_image_models():
@@ -281,17 +309,24 @@ image_quantize = "8"   # Default: int8 quantization
 image_low_ram = False
 image_style_preset = "none"
 image_style_intensity = 2  # 1=Subtle, 2=Normal, 3=Strong
+image_width = 1024
+image_height = 1024
 
 @app.post("/api/image-settings")
 async def set_image_settings(request: Request):
-    global image_quantize, image_low_ram, image_style_preset, image_style_intensity
+    global image_quantize, image_low_ram, image_style_preset, image_style_intensity, image_width, image_height
     data = await request.json()
-    image_quantize = data.get("quantize", "8")
-    image_low_ram = data.get("low_ram", False)
-    image_style_preset = data.get("style_preset", "none")
-    image_style_intensity = data.get("style_intensity", 2)
+    image_quantize = data.get("quantize", image_quantize)
+    image_low_ram = data.get("low_ram", image_low_ram)
+    image_style_preset = data.get("style_preset", image_style_preset)
+    image_style_intensity = data.get("style_intensity", image_style_intensity)
+    if "width" in data:
+        image_width = int(data["width"])
+    if "height" in data:
+        image_height = int(data["height"])
     return {"success": True, "quantize": image_quantize, "low_ram": image_low_ram,
-            "style_preset": image_style_preset, "style_intensity": image_style_intensity}
+            "style_preset": image_style_preset, "style_intensity": image_style_intensity,
+            "width": image_width, "height": image_height}
 
 
 # ── REST API: Image Upload & Library ─────────────────────────────────────────
@@ -531,6 +566,12 @@ async def load_model(req: LoadModelRequest):
     try:
         active_engine = get_engine_for_arch(arch)
         info = active_engine.load(path)
+        # Persist last loaded model
+        try:
+            _last_llm_config.parent.mkdir(parents=True, exist_ok=True)
+            _last_llm_config.write_text(req.model_name)
+        except Exception:
+            pass
         return {"status": "loaded", "model": req.model_name, "info": info}
     except Exception as e:
         raise HTTPException(500, f"Failed to load: {str(e)}")
@@ -542,6 +583,12 @@ async def unload_model():
     if active_engine and active_engine.is_loaded:
         name = active_engine.model_name
         active_engine.unload()
+        # Clear last model persistence
+        try:
+            if _last_llm_config.exists():
+                _last_llm_config.unlink()
+        except Exception:
+            pass
         return {"status": "unloaded", "model": name}
     return {"status": "no_model_loaded"}
 

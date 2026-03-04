@@ -520,31 +520,70 @@
         <button class="image-modal-close" onclick="closeImageModal()">✕</button>
     </div>
 
-    <!-- ── Input Bar ───────────────────────────────────────── -->
-    <div class="input-area">
-        <div class="input-container">
-            <input type="file" id="imageFileInput" style="display:none"
-                accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleImageFileSelect(this)">
-            <button id="attachBtn" class="attach-btn" onclick="document.getElementById('imageFileInput').click()"
-                title="Attach image">
-                📎
-            </button>
-            <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
-                oninput="autoResize(this)"></textarea>
-            <button id="sendBtn" onclick="sendMessage()" disabled>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-            </button>
-            <button id="stopBtn" onclick="stopGeneration()" style="display:none">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="4" y="4" width="16" height="16" rx="2" />
-                </svg>
-            </button>
+    <!-- ── Input Zone (with flanking image settings) ─── -->
+    <div class="input-zone">
+        <div class="img-settings-panel left" id="imgSettingsLeft">
+            <div class="img-settings-title">📐 Resolution</div>
+            <div class="img-slider-row">
+                <label>Width</label>
+                <input type="range" id="imgWidthSlider" min="256" max="1536" step="64" value="1024"
+                    oninput="setImageWidth(this.value)">
+                <span class="img-slider-val" id="imgWidthVal">1024</span>
+            </div>
+            <div class="img-slider-row">
+                <label>Height</label>
+                <input type="range" id="imgHeightSlider" min="256" max="1536" step="64" value="1024"
+                    oninput="setImageHeight(this.value)">
+                <span class="img-slider-val" id="imgHeightVal">1024</span>
+            </div>
+            <div class="img-dim-summary" id="imgDimSummary">1024 × 1024</div>
         </div>
-        <div class="input-footer">
-            <span id="statusText">Disconnected</span>
-            <span id="tokStats"></span>
+
+        <div class="input-area">
+            <div class="input-container">
+                <input type="file" id="imageFileInput" style="display:none"
+                    accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleImageFileSelect(this)">
+                <button id="attachBtn" class="attach-btn" onclick="document.getElementById('imageFileInput').click()"
+                    title="Attach image">
+                    📎
+                </button>
+                <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
+                    oninput="autoResize(this)"></textarea>
+                <button id="sendBtn" onclick="sendMessage()" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+                <button id="stopBtn" onclick="stopGeneration()" style="display:none">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                    </svg>
+                </button>
+            </div>
+            <div class="input-footer">
+                <span id="statusText">Disconnected</span>
+                <span id="tokStats"></span>
+            </div>
+        </div>
+
+        <div class="img-settings-panel right" id="imgSettingsRight">
+            <div class="img-settings-title">🎛️ Quality</div>
+            <div class="img-setting-row">
+                <label>Quantization</label>
+                <select id="imgSettingsQuant" class="img-settings-select" onchange="setImageQuantization(this.value)">
+                    <option value="none">Full Precision</option>
+                    <option value="8" selected>int8 (recommended)</option>
+                    <option value="4">int4 (faster)</option>
+                    <option value="3">int3 (fastest)</option>
+                </select>
+            </div>
+            <div class="img-setting-row">
+                <label>Low-RAM</label>
+                <label class="toggle-switch small">
+                    <input type="checkbox" id="imgSettingsLowRam" onchange="setImageLowRam(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
         </div>
     </div>
 

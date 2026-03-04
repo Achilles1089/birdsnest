@@ -1724,8 +1724,14 @@ def tool_generate_image(args: Dict) -> str:
     except ImportError:
         pass
 
-    width = args.get("width", 512)
-    height = args.get("height", 512)
+    # Read resolution from server settings (set via flanking panel sliders)
+    try:
+        from birdsnest.server import image_width as _iw, image_height as _ih
+        width = args.get("width", _iw)
+        height = args.get("height", _ih)
+    except ImportError:
+        width = args.get("width", 1024)
+        height = args.get("height", 1024)
 
     # Ensure output directory
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)

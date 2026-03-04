@@ -917,11 +917,130 @@ main {
 
 /* ── Input ────────────────────────────────────────── */
 
+.input-zone {
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    position: relative;
+}
+
+.img-settings-panel {
+    width: 0;
+    overflow: hidden;
+    opacity: 0;
+    padding: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    justify-content: center;
+}
+
+.img-settings-panel.active {
+    width: 200px;
+    opacity: 1;
+    padding: 12px 16px;
+}
+
+.img-settings-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.img-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.img-slider-row label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    width: 40px;
+    flex-shrink: 0;
+}
+
+.img-slider-row input[type="range"] {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+}
+
+.img-slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+
+.img-slider-val {
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--text-primary);
+    width: 32px;
+    text-align: right;
+}
+
+.img-dim-summary {
+    font-size: 11px;
+    color: var(--accent);
+    text-align: center;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.img-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.img-setting-row label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.img-settings-select {
+    font-size: 11px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+}
+
+@media (max-width: 900px) {
+    .input-zone {
+        flex-direction: column;
+    }
+
+    .img-settings-panel.active {
+        width: 100%;
+    }
+}
+
 .input-area {
     padding: 12px 20px 16px;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
+    flex: 1;
+    min-width: 0;
 }
 
 .input-container {
