@@ -244,6 +244,8 @@ async def list_image_models():
             "legacy": entry.get("legacy", False),
             "engine": entry.get("engine", "mflux"),
             "type": "upscaler" if "upscale" in entry.get("capabilities", []) else "generator",
+            "resolutions": entry.get("resolutions", []),
+            "default_resolution": entry.get("default_resolution"),
         })
 
     return {"catalog": catalog, "installed_raw": installed_raw, "active": active_image_model}
@@ -311,32 +313,7 @@ async def select_image_model(request: Request):
 
 @app.delete("/api/image-models/{dir_name}")
 async def delete_image_model(dir_name: str):
-    """Delete a cached image model from HF hub cache."""
     return _delete_hf_model(dir_name)
-
-
-@app.post("/api/image-engine/warm")
-async def warm_image_engine():
-    """Pre-load the selected image model and prime GPU caches."""
-    try:
-        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
-        config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
-        model_id = "schnell"
-        if config_path.exists():
-            model_id = config_path.read_text().strip() or "schnell"
-
-        engine = get_engine(model_id)
-
-        if not engine.is_ready or engine.current_model != model_id:
-            load_result = engine.load_model(model_id)
-            if load_result.get("status") == "error":
-                return load_result
-
-        warm_result = engine.warm()
-        return {**warm_result, "model": model_id}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 
 @app.get("/api/image-engine/status")
 async def image_engine_status():
@@ -747,44 +724,75 @@ async def warm_model():
 
 # ── Image Engine Endpoints ──────────────────────────────────────────────────
 
+_image_warming = False  # Flag: blocks generation while warming
+
 @app.post("/api/image-engine/warm")
 async def warm_image_engine():
-    """Pre-load the image model into GPU memory and prime Metal kernel caches."""
-    try:
-        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
-        from pathlib import Path
-        import os
+    """Full pre-load: load model into GPU memory, run tiny inference to prime MPS kernels."""
+    global _image_warming
+    if _image_warming:
+        return {"status": "error", "error": "Already warming — please wait"}
 
-        engine = get_engine()
+    _image_warming = True
+    try:
+        import os
 
         # Read selected model from config
         workspace = os.environ.get("BIRDSNEST_WORKSPACE", os.path.expanduser("~/birdsnest_workspace"))
         config_path = Path(workspace) / ".birdsnest_image_model"
-        model_id = "z-image-turbo"
+        model_id = "sdxl-turbo"
         if config_path.exists():
-            model_id = config_path.read_text().strip() or "z-image-turbo"
+            model_id = config_path.read_text().strip() or "sdxl-turbo"
 
-        if model_id not in MODEL_REGISTRY:
-            return {"status": "error", "error": f"Unknown model: {model_id}"}
+        # Determine engine type from catalog
+        entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
+        engine_type = entry.get("engine", "mflux") if entry else "mflux"
 
-        # Load model if not already loaded
-        if not engine.is_ready or engine.current_model != model_id:
-            load_result = engine.load_model(model_id)
-            if load_result.get("status") == "error":
-                return {"status": "error", "error": load_result.get("message")}
+        if engine_type == "diffusers":
+            # ── Diffusers path (SDXL Turbo / Lightning) ──
+            from birdsnest.image_engine import get_diffusers_engine
+            engine = get_diffusers_engine()
 
-        # Warm Metal kernel caches with a tiny image
-        warm_result = engine.warm()
-        return {
-            "status": "warm",
-            "model": engine.current_model,
-            "engine": engine.status,
-            **warm_result,
-        }
-    except ImportError:
-        return {"status": "error", "error": "mflux not installed"}
+            # Load if not already loaded
+            if not engine.is_ready or engine.current_model != model_id:
+                load_result = engine.load_model(model_id)
+                if load_result.get("status") == "error":
+                    return {"status": "error", "error": load_result.get("message")}
+
+            # Warm with tiny inference
+            warm_result = engine.warm()
+            return {
+                "status": "warm",
+                "model": model_id,
+                "engine_type": "diffusers",
+                **warm_result,
+            }
+        else:
+            # ── mflux path ──
+            from birdsnest.image_engine import get_engine, MODEL_REGISTRY
+
+            if model_id not in MODEL_REGISTRY:
+                return {"status": "error", "error": f"Unknown mflux model: {model_id}"}
+
+            engine = get_engine()
+            if not engine.is_ready or engine.current_model != model_id:
+                load_result = engine.load_model(model_id)
+                if load_result.get("status") == "error":
+                    return {"status": "error", "error": load_result.get("message")}
+
+            warm_result = engine.warm()
+            return {
+                "status": "warm",
+                "model": engine.current_model,
+                "engine_type": "mflux",
+                **warm_result,
+            }
+    except ImportError as e:
+        return {"status": "error", "error": f"Engine not installed: {e}"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+    finally:
+        _image_warming = False
 
 @app.get("/api/image-engine/status")
 async def image_engine_status():

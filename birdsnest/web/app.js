@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettings();
     updateRAGStatus();
     loadTools();
-    loadImageSettings();
+    loadImageModels();
     setupDragDrop();
     document.getElementById('chatInput').focus();
 });
@@ -1012,6 +1012,25 @@ async function loadImageModels() {
         const notDownloadedNote = !active.installed
             ? `<div class="model-card-desc" style="color:var(--yellow)">⚠ Will auto-download on first generation</div>`
             : '';
+
+        // Build resolution picker from model's supported resolutions
+        const resolutions = active.resolutions || [];
+        const curW = parseInt(localStorage.getItem('birdsnest_img_width') || '1024');
+        const curH = parseInt(localStorage.getItem('birdsnest_img_height') || '1024');
+        let resolutionHtml = '';
+        if (resolutions.length > 0) {
+            const presetBtns = resolutions.map(([w, h]) => {
+                const label = w === h ? `${w}²` : `${w}×${h}`;
+                const isActive = w === curW && h === curH ? 'active' : '';
+                return `<button class="img-preset ${isActive}" onclick="setImagePreset(${w},${h})" data-w="${w}" data-h="${h}">${label}</button>`;
+            }).join('');
+            resolutionHtml = `
+                <div class="img-setting-group" style="margin-top:8px">
+                    <label class="img-setting-label">📐 Resolution</label>
+                    <div class="img-preset-grid">${presetBtns}</div>
+                </div>`;
+        }
+
         activeSection.className = '';
         activeSection.innerHTML = `
             <div class="model-card">
@@ -1025,19 +1044,10 @@ async function loadImageModels() {
                 </div>
                 <div class="model-card-desc">${active.desc}</div>
                 ${notDownloadedNote}
+                ${resolutionHtml}
                 <div class="model-card-actions">
-                    <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
-                </div>
-            </div>`;
-    } else if (activeImageModel) {
-        // Selected model not in catalog (edge case)
-        activeSection.className = '';
-        activeSection.innerHTML = `
-            <div class="model-card">
-                <div class="model-card-header">
-                    <span class="model-card-name">${activeImageModel}</span>
-                </div>
-                <div class="model-card-actions">
+                    <button class="warm-btn" id="warmImageBtn" onclick="warmImageEngine()"
+                        title="Pre-load model into GPU for instant generation">🔥 Warm Engine</button>
                     <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
                 </div>
             </div>`;
@@ -1102,6 +1112,18 @@ async function selectImageModel(id) {
     const label = id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     document.getElementById('imgModelLabel').textContent = label;
     document.getElementById('imgModelDot').className = 'model-dot active';
+
+    // Auto-set resolution to model's default
+    try {
+        const res = await fetch('/api/image-models');
+        const data = await res.json();
+        const entry = (data.catalog || []).find(m => m.id === id);
+        if (entry && entry.default_resolution) {
+            const [w, h] = entry.default_resolution;
+            setImagePreset(w, h);
+        }
+    } catch { }
+
     addSystemMessage(`Image model set to ${id}`);
     loadImageModels();
 }
@@ -1139,18 +1161,7 @@ function setImagePreset(w, h) {
 }
 
 function loadImageSettings() {
-    const width = parseInt(localStorage.getItem('birdsnest_img_width') || '1024');
-    const height = parseInt(localStorage.getItem('birdsnest_img_height') || '1024');
-    // Restore preset button highlight
-    document.querySelectorAll('.img-preset').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.w) === width && parseInt(btn.dataset.h) === height);
-    });
-    // Sync resolution with server
-    fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ width: width, height: height }),
-    }).catch(() => { });
+    // Legacy stub — resolution is now per-model in the loaded card
 }
 
 async function warmImageEngine() {

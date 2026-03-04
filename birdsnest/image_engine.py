@@ -327,6 +327,35 @@ class DiffusersEngine:
             import gc
             gc.collect()
 
+    def warm(self) -> dict:
+        """Run a tiny inference to prime MPS kernel caches. Model must be loaded."""
+        if not self.is_ready:
+            return {"status": "error", "message": "No diffusers model loaded"}
+        try:
+            import torch
+            t0 = time.time()
+            logger.info(f"Warming diffusers model: {self._model_id}")
+            with self._lock:
+                # Tiny 64×64 inference to compile Metal kernels
+                reg = MODEL_REGISTRY.get(self._model_id, {})
+                steps = reg.get("default_steps", 1)
+                guidance = reg.get("guidance_scale", 0.0)
+                gen = torch.Generator(device=self._pipeline.device).manual_seed(0)
+                self._pipeline(
+                    prompt="warmup",
+                    width=64,
+                    height=64,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=gen,
+                )
+            elapsed = time.time() - t0
+            logger.info(f"Diffusers warm complete: {elapsed:.1f}s")
+            return {"status": "warm", "elapsed": round(elapsed, 1)}
+        except Exception as e:
+            logger.error(f"Diffusers warm failed: {e}")
+            return {"status": "error", "message": str(e)}
+
     def load_model(self, model_id: str, force: bool = False) -> dict:
         """Load an SDXL model into GPU memory."""
         if model_id == self._model_id and self._ready and not force:
@@ -514,3 +543,11 @@ def get_engine(model_id: Optional[str] = None) -> 'ImageEngine | DiffusersEngine
         if _mflux_engine is None:
             _mflux_engine = ImageEngine(quantize=4)
         return _mflux_engine
+
+
+def get_diffusers_engine() -> DiffusersEngine:
+    """Get or create the DiffusersEngine singleton (without unloading mflux)."""
+    global _diffusers_engine
+    if _diffusers_engine is None:
+        _diffusers_engine = DiffusersEngine()
+    return _diffusers_engine

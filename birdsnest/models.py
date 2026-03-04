@@ -336,6 +336,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "6B",
         "capabilities": ["generate", "img2img", "lora"],
         "description": "Fastest high-quality — 9 steps, distilled 6B, bilingual text rendering",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
+        "default_resolution": [1024, 1024],
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -354,6 +356,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "4B",
         "capabilities": ["generate", "edit", "img2img", "lora"],
         "description": "Smallest & fastest FLUX.2 — 4 steps, image editing support",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
     {
         "id": "flux2-klein-9b",
@@ -368,6 +372,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "9B",
         "capabilities": ["generate", "edit", "img2img", "lora"],
         "description": "Larger FLUX.2 — better quality, image editing, 9B params",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -386,6 +392,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "8B",
         "capabilities": ["generate"],
         "description": "Distilled FIBO — 8 steps, JSON-native prompting, ~10x faster",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
+        "default_resolution": [1024, 1024],
     },
     {
         "id": "fibo",
@@ -400,6 +408,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "8B",
         "capabilities": ["generate", "refine", "inspire"],
         "description": "Full FIBO — JSON-native precision, VLM refine/inspire modes, 30 steps",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
+        "default_resolution": [1024, 1024],
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -417,6 +427,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "3B",
         "capabilities": ["upscale"],
         "description": "1-step upscale — no prompt, fast, high-fidelity super-resolution",
+        "resolutions": [],
+        "default_resolution": None,
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -434,6 +446,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "20B",
         "capabilities": ["generate", "edit"],
         "description": "Largest model — 20B, best prompt understanding & world knowledge, slower",
+        "resolutions": [[512,512], [768,768], [1024,1024], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -453,6 +467,8 @@ IMAGE_MODEL_CATALOG = [
         "capabilities": ["generate", "lora"],
         "description": "Fast FLUX.1 — 4 steps, distilled, good general quality",
         "legacy": True,
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
     {
         "id": "dev",
@@ -468,6 +484,8 @@ IMAGE_MODEL_CATALOG = [
         "capabilities": ["generate", "lora", "controlnet", "depth"],
         "description": "Best FLUX.1 — 20 steps, full quality, controlnet/depth support",
         "legacy": True,
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
     {
         "id": "krea-dev",
@@ -483,6 +501,8 @@ IMAGE_MODEL_CATALOG = [
         "capabilities": ["generate", "lora"],
         "description": "Enhanced photorealism — Krea AI fine-tuned FLUX.1 Dev",
         "legacy": True,
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
     },
     {
         "id": "kontext",
@@ -497,6 +517,8 @@ IMAGE_MODEL_CATALOG = [
         "capabilities": ["generate", "edit", "style-transfer"],
         "description": "Image editing via text — style transfer, character consistency, in-context gen",
         "legacy": True,
+        "resolutions": [[512,512], [768,768], [1024,1024]],
+        "default_resolution": [1024, 1024],
     },
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -514,6 +536,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "3.5B",
         "capabilities": ["generate"],
         "description": "Fastest — 1 step, 512² only, adversarial distillation, real-time generation",
+        "resolutions": [[512,512]],
+        "default_resolution": [512, 512],
     },
     {
         "id": "sdxl-lightning",
@@ -528,6 +552,8 @@ IMAGE_MODEL_CATALOG = [
         "params": "3.5B + LoRA",
         "capabilities": ["generate"],
         "description": "Ultra-fast 1024² — 4 steps, ByteDance Lightning LoRA, best speed/quality ratio",
+        "resolutions": [[512,512], [768,768], [1024,1024]],
+        "default_resolution": [1024, 1024],
     },
 ]
 
