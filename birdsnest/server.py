@@ -1057,13 +1057,14 @@ async def websocket_chat(websocket: WebSocket):
                 """Listen for cancel messages while generation is running."""
                 try:
                     while not cancel_flag["cancelled"]:
-                        data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
-                        inner_msg = json.loads(data)
-                        if inner_msg.get("type") == "cancel":
-                            cancel_flag["cancelled"] = True
-                            return
-                except asyncio.TimeoutError:
-                    pass
+                        try:
+                            data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                            inner_msg = json.loads(data)
+                            if inner_msg.get("type") == "cancel":
+                                cancel_flag["cancelled"] = True
+                                return
+                        except asyncio.TimeoutError:
+                            continue  # Keep polling
                 except Exception:
                     pass
 
