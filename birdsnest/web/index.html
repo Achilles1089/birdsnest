@@ -19,19 +19,15 @@
             <span class="subtitle">Non-Transformer AI</span>
         </div>
         <div class="header-center">
-            <div class="header-badges">
-                <div class="model-icon-badge" id="llmBadge" onclick="toggleModelPanel('tabLLM')" title="No LLM loaded">
-                    <span class="badge-icon" id="llmIcon">🤖</span>
-                    <span class="quant-dot" id="llmQuant"></span>
+            <div class="model-badge-dual">
+                <div class="badge-section" id="llmBadgeSection" onclick="toggleModelPanel('tabAi')">
+                    <span class="model-dot" id="modelDot"></span>
+                    <span id="modelLabel">No model</span>
                 </div>
-                <div class="model-icon-badge" id="imgBadge" onclick="toggleImageSettingsOrTab()" title="No image model">
-                    <span class="badge-icon" id="imgIcon">🖌️</span>
-                    <span class="quant-dot" id="imgQuant"></span>
-                </div>
-                <div class="model-icon-badge" id="musicBadge" onclick="toggleModelPanel('tabMusic')"
-                    title="No music model">
-                    <span class="badge-icon" id="musicIcon">🔇</span>
-                    <span class="quant-dot" id="musicQuant"></span>
+                <span class="badge-sep">│</span>
+                <div class="badge-section" id="imgBadgeSection" onclick="toggleModelPanel('tabImage')">
+                    <span class="model-dot dim" id="imgModelDot"></span>
+                    <span id="imgModelLabel">No image model</span>
                 </div>
             </div>
         </div>
@@ -84,143 +80,74 @@
             <!-- Instant tools (no input needed) -->
             <button class="tool-card" data-tool="instant" data-prompt="what time is it" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🕐</span><span class="tool-name">Time</span>
-                <span class="tool-hint">"what time is it"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="system info" onclick="fireToolCard(this)">
                 <span class="tool-emoji">⚙️</span><span class="tool-name">System</span>
-                <span class="tool-hint">"system info"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="clipboard" onclick="fireToolCard(this)">
                 <span class="tool-emoji">📋</span><span class="tool-name">Clipboard</span>
-                <span class="tool-hint">"clipboard"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="take a screenshot" onclick="fireToolCard(this)">
                 <span class="tool-emoji">📸</span><span class="tool-name">Screenshot</span>
-                <span class="tool-hint">"take a screenshot"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="list todos" onclick="fireToolCard(this)">
                 <span class="tool-emoji">✅</span><span class="tool-name">Todos</span>
-                <span class="tool-hint">"list todos"</span>
             </button>
             <button class="tool-card" data-tool="instant" data-prompt="list memories" onclick="fireToolCard(this)">
                 <span class="tool-emoji">🧠</span><span class="tool-name">Memory</span>
-                <span class="tool-hint">"list memories"</span>
             </button>
 
-            <!-- Input tools -->
-            <button class="tool-card" data-tool="input" data-prefix="what is " data-placeholder="e.g. 256 * 7"
-                onclick="fireToolCard(this)">
+            <!-- Input tools — click populates chat input -->
+            <button class="tool-card" data-tool="input" data-prefix="what is " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🧮</span><span class="tool-name">Calculator</span>
-                <span class="tool-hint">"calculate 256 * 7"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="e.g. 256 * 7"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="search for " data-placeholder="query..."
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="search for " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🔍</span><span class="tool-name">Web Search</span>
-                <span class="tool-hint">"search for latest news"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="query..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="run " data-placeholder="ls -la"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="run " onclick="fireToolCard(this)">
                 <span class="tool-emoji">💻</span><span class="tool-name">Shell</span>
-                <span class="tool-hint">"run ls -la"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="ls -la"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="weather in " data-placeholder="city name"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="weather in " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌤️</span><span class="tool-name">Weather</span>
-                <span class="tool-hint">"weather in Miami"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="city name"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="translate " data-suffix=" to "
-                data-placeholder="hello → spanish" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="translate " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌐</span><span class="tool-name">Translate</span>
-                <span class="tool-hint">"translate hello to spanish"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="hello to spanish"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="transcript of " data-placeholder="YouTube URL"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="transcript of " onclick="fireToolCard(this)">
                 <span class="tool-emoji">📺</span><span class="tool-name">YouTube</span>
-                <span class="tool-hint">"transcript of [URL]"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="YouTube URL"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="file path" data-action="file"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="read " onclick="fireToolCard(this)">
                 <span class="tool-emoji">📁</span><span class="tool-name">Read File</span>
-                <span class="tool-hint">"read ~/file.txt"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path to read"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="" data-placeholder="Python code"
-                data-action="python" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="python " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🐍</span><span class="tool-name">Python</span>
-                <span class="tool-hint">"python print('hello')"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="print('hello')"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="fetch " data-placeholder="URL"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="fetch " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🌍</span><span class="tool-name">Fetch URL</span>
-                <span class="tool-hint">"fetch https://..."</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="https://..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
 
             <!-- Image, Search & Creative tools -->
             <button class="tool-card" data-tool="input" data-prefix="generate an image of "
-                data-placeholder="a sunset over mountains" onclick="fireToolCard(this)">
+                onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎨</span><span class="tool-name">Image Gen</span>
-                <span class="tool-hint">"generate an image of..."</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="a sunset..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="upscale the image " data-placeholder="to 2160p"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="upscale the image" onclick="fireToolCard(this)">
                 <span class="tool-emoji">⬆️</span><span class="tool-name">Upscale</span>
-                <span class="tool-hint">"upscale this image"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="2x, 3x, 2160p"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="edit the image to "
-                data-placeholder="add sunset sky" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="edit the image to " onclick="fireToolCard(this)">
                 <span class="tool-emoji">✂️</span><span class="tool-name">Edit Image</span>
-                <span class="tool-hint">"edit the image to..."</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="add snow, remove bg..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="search images of "
-                data-placeholder="golden retriever" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="search images of " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🖼️</span><span class="tool-name">Image Search</span>
-                <span class="tool-hint">"search images of cats"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="cats, sunset..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="find files about " data-placeholder="invoice"
-                onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="find files about " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🔎</span><span class="tool-name">File Search</span>
-                <span class="tool-hint">"find files about invoice"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="invoice, readme..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="generate music of "
-                data-placeholder="epic orchestral battle" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="generate music of " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🎵</span><span class="tool-name">Music Gen</span>
-                <span class="tool-hint">"generate music of lofi"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="lofi chill..."
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
-            <button class="tool-card" data-tool="input" data-prefix="query database "
-                data-placeholder="db.sqlite: SELECT *" data-action="database" onclick="fireToolCard(this)">
+            <button class="tool-card" data-tool="input" data-prefix="query database " onclick="fireToolCard(this)">
                 <span class="tool-emoji">🗄️</span><span class="tool-name">Database</span>
-                <span class="tool-hint">"query database path: SQL"</span>
-                <div class="tool-input-wrap"><input class="tool-input" type="text" placeholder="path: SQL"
-                        onkeydown="handleToolInput(event, this)"></div>
             </button>
         </div>
 
@@ -283,6 +210,54 @@
                 <h3>Downloaded</h3>
                 <div id="imageInstalledList" class="model-list"></div>
             </div>
+
+            <!-- ── Image Settings (ONE place to edit) ── -->
+            <div class="panel-section img-settings-section">
+                <h3>⚙️ Generation Settings</h3>
+                <div class="img-setting-group">
+                    <label class="img-setting-label">Resolution</label>
+                    <div class="img-preset-grid" id="imgPresetGrid">
+                        <button class="img-preset" onclick="setImagePreset(512,512)" data-w="512"
+                            data-h="512">512²</button>
+                        <button class="img-preset" onclick="setImagePreset(768,768)" data-w="768"
+                            data-h="768">768²</button>
+                        <button class="img-preset active" onclick="setImagePreset(1024,1024)" data-w="1024"
+                            data-h="1024">1024²</button>
+                        <button class="img-preset" onclick="setImagePreset(512,768)" data-w="512"
+                            data-h="768">512×768</button>
+                        <button class="img-preset" onclick="setImagePreset(768,512)" data-w="768"
+                            data-h="512">768×512</button>
+                        <button class="img-preset" onclick="setImagePreset(768,1024)" data-w="768"
+                            data-h="1024">768×1024</button>
+                        <button class="img-preset" onclick="setImagePreset(1024,768)" data-w="1024"
+                            data-h="768">1024×768</button>
+                        <button class="img-preset" onclick="setImagePreset(1024,1536)" data-w="1024"
+                            data-h="1536">1024×1536</button>
+                    </div>
+                </div>
+                <div class="img-setting-group">
+                    <label class="img-setting-label">Quantization</label>
+                    <select id="imgQuantSelect" class="setting-select" onchange="setImageQuantization(this.value)">
+                        <option value="none">Full Precision (slowest, best quality)</option>
+                        <option value="8" selected>int8 — Fast (recommended)</option>
+                        <option value="4">int4 — Faster (slight quality loss)</option>
+                        <option value="3">int3 — Fastest (noticeable quality loss)</option>
+                    </select>
+                </div>
+                <div class="img-setting-group">
+                    <div class="setting-row">
+                        <label>Low-RAM Mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="imgLowRamToggle" onchange="setImageLowRam(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <small class="setting-hint">Constrains memory. Enable on Macs with ≤16GB RAM.</small>
+                </div>
+                <button class="warm-btn" id="warmModelBtn" onclick="warmModel()"
+                    title="Run a warm-up pass to eliminate first-message delay">🔥 Warm Model</button>
+            </div>
+
             <div class="panel-section">
                 <h3>🎨 Style Preset</h3>
                 <div class="style-preset-chips" id="stylePresetChips">
@@ -436,31 +411,7 @@
             </div>
         </div>
 
-        <div class="settings-section">
-            <h3>Image Performance</h3>
-            <div class="setting-block">
-                <div class="setting-label-row">
-                    <label>Quantization</label>
-                    <span class="setting-value" id="imgQuantValue">int8</span>
-                </div>
-                <select id="imgQuantSelect" class="setting-select" onchange="setImageQuantization(this.value)">
-                    <option value="none">Full Precision (slowest, best quality)</option>
-                    <option value="8" selected>int8 — Fast (recommended)</option>
-                    <option value="4">int4 — Faster (slight quality loss)</option>
-                    <option value="3">int3 — Fastest (noticeable quality loss)</option>
-                </select>
-                <small class="setting-hint">Lower = faster generation, less memory. int8 is nearly lossless.</small>
-            </div>
-            <div class="setting-row">
-                <label>Low-RAM Mode</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="imgLowRamToggle" onchange="setImageLowRam(this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <small class="setting-hint" style="margin-top: -8px;">Constrains memory cache. Enable on Macs with ≤16GB
-                RAM.</small>
-        </div>
+
 
         <div class="settings-section">
             <h3>Tools</h3>
@@ -520,73 +471,31 @@
         <button class="image-modal-close" onclick="closeImageModal()">✕</button>
     </div>
 
-    <!-- ── Input Zone (with flanking image settings) ─── -->
-    <div class="input-zone">
-        <div class="img-settings-panel left" id="imgSettingsLeft">
-            <div class="img-settings-title">📐 Resolution</div>
-            <div class="img-preset-grid" id="imgPresetGrid">
-                <button class="img-preset" onclick="setImagePreset(512,512)" data-w="512" data-h="512">512²</button>
-                <button class="img-preset" onclick="setImagePreset(768,768)" data-w="768" data-h="768">768²</button>
-                <button class="img-preset active" onclick="setImagePreset(1024,1024)" data-w="1024"
-                    data-h="1024">1024²</button>
-                <button class="img-preset" onclick="setImagePreset(512,768)" data-w="512" data-h="768">512×768</button>
-                <button class="img-preset" onclick="setImagePreset(768,512)" data-w="768" data-h="512">768×512</button>
-                <button class="img-preset" onclick="setImagePreset(768,1024)" data-w="768"
-                    data-h="1024">768×1024</button>
-                <button class="img-preset" onclick="setImagePreset(1024,768)" data-w="1024"
-                    data-h="768">1024×768</button>
-                <button class="img-preset" onclick="setImagePreset(1024,1536)" data-w="1024"
-                    data-h="1536">1024×1536</button>
-            </div>
+    <!-- ── Input Bar ───────────────────────────────────────── -->
+    <div class="input-area">
+        <div class="input-container">
+            <input type="file" id="imageFileInput" style="display:none"
+                accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleImageFileSelect(this)">
+            <button id="attachBtn" class="attach-btn" onclick="document.getElementById('imageFileInput').click()"
+                title="Attach image">
+                📎
+            </button>
+            <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
+                oninput="autoResize(this)"></textarea>
+            <button id="sendBtn" onclick="sendMessage()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+            </button>
+            <button id="stopBtn" onclick="stopGeneration()" style="display:none">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                </svg>
+            </button>
         </div>
-
-        <div class="input-area">
-            <div class="input-container">
-                <input type="file" id="imageFileInput" style="display:none"
-                    accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleImageFileSelect(this)">
-                <button id="attachBtn" class="attach-btn" onclick="document.getElementById('imageFileInput').click()"
-                    title="Attach image">
-                    📎
-                </button>
-                <textarea id="chatInput" placeholder="Type a message..." rows="1" onkeydown="handleKeydown(event)"
-                    oninput="autoResize(this)"></textarea>
-                <button id="sendBtn" onclick="sendMessage()" disabled>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
-                </button>
-                <button id="stopBtn" onclick="stopGeneration()" style="display:none">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="4" y="4" width="16" height="16" rx="2" />
-                    </svg>
-                </button>
-            </div>
-            <div class="input-footer">
-                <span id="statusText">Disconnected</span>
-                <span id="tokStats"></span>
-            </div>
-        </div>
-
-        <div class="img-settings-panel right" id="imgSettingsRight">
-            <div class="img-settings-title">🎛️ Quality</div>
-            <div class="img-setting-row">
-                <label>Quantization</label>
-                <select id="imgSettingsQuant" class="img-settings-select" onchange="setImageQuantization(this.value)">
-                    <option value="none">Full Precision</option>
-                    <option value="8" selected>int8 (recommended)</option>
-                    <option value="4">int4 (faster)</option>
-                    <option value="3">int3 (fastest)</option>
-                </select>
-            </div>
-            <div class="img-setting-row">
-                <label>Low-RAM</label>
-                <label class="toggle-switch small">
-                    <input type="checkbox" id="imgSettingsLowRam" onchange="setImageLowRam(this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <button class="warm-btn" id="warmModelBtn" onclick="warmModel()"
-                title="Run a warm-up pass to eliminate first-message delay">🔥 Warm Model</button>
+        <div class="input-footer">
+            <span id="statusText">Disconnected</span>
+            <span id="tokStats"></span>
         </div>
     </div>
 

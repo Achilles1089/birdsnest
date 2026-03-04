@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTools();
     loadImageSettings();
     setupDragDrop();
-    updateHeaderBadges();
     document.getElementById('chatInput').focus();
 });
 
@@ -493,7 +492,6 @@ function sendMessage() {
     }
 
     ws.send(JSON.stringify(payload));
-    input.focus();
 }
 
 function handleKeydown(e) {
@@ -522,9 +520,13 @@ async function loadModels() {
 
         // Update header model badge
         if (data.loaded_nickname) {
+            document.getElementById('modelLabel').textContent = data.loaded_nickname;
+            document.getElementById('modelDot').className = 'model-dot active';
             currentNickname = data.loaded_nickname;
+        } else {
+            document.getElementById('modelLabel').textContent = 'No model';
+            document.getElementById('modelDot').className = 'model-dot';
         }
-        updateHeaderBadges();
 
         // Tab badge: total local models
         const aiBadge = document.getElementById('badgeAi');
@@ -709,7 +711,8 @@ async function loadModel(name) {
     closeAllPanels();
 
     setStatus('Loading model...', 'yellow');
-    updateHeaderBadges();
+    document.getElementById('modelDot').className = 'model-dot loading';
+    document.getElementById('modelLabel').textContent = 'Loading...';
 
     try {
         const res = await fetch('/api/models/load', {
@@ -727,7 +730,8 @@ async function loadModel(name) {
             throw new Error(data.detail || 'Load failed');
         }
     } catch (e) {
-        updateHeaderBadges();
+        document.getElementById('modelDot').className = 'model-dot';
+        document.getElementById('modelLabel').textContent = 'Load failed';
         setStatus('Error', 'red');
         addSystemMessage(`Failed to load: ${e.message}`, 'error');
     } finally {
@@ -736,12 +740,14 @@ async function loadModel(name) {
 }
 
 async function unloadModel() {
-    showLoadingOverlay('Unloading Model', 'Freeing GPU memory...');
+    const currentLabel = document.getElementById('modelLabel').textContent;
+    showLoadingOverlay('Unloading Model', currentLabel + ' — Freeing GPU memory...');
     closeAllPanels();
 
     try {
         await fetch('/api/models/unload', { method: 'POST' });
-        updateHeaderBadges();
+        document.getElementById('modelLabel').textContent = 'No model';
+        document.getElementById('modelDot').className = 'model-dot';
         currentNickname = 'Bird\'s Nest';
         setStatus('No model', 'yellow');
         loadModels();
@@ -856,170 +862,17 @@ function toggleModelPanel(tabId) {
     panel.classList.toggle('active');
     overlay.classList.toggle('active', panel.classList.contains('active'));
     if (panel.classList.contains('active')) {
+        if (tabId) {
+            // Map tabId to the tab data attribute
+            const tabMap = { tabAi: 'ai', tabImage: 'image', tabTranslation: 'translation', tabMusic: 'music', tabEmbed: 'embed' };
+            const tab = tabMap[tabId] || 'ai';
+            switchModelTab(tab);
+        }
         loadModels();
         loadImageModels();
         loadTranslationModels();
         loadMusicModels();
         loadEmbeddingModels();
-        // Switch to requested tab if specified
-        if (tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const el = document.getElementById(tabId);
-            if (el) el.classList.add('active');
-            // Update tab buttons
-            const tabName = tabId.replace('tab', '').toLowerCase();
-            document.querySelectorAll('.model-tab').forEach(t => t.classList.remove('active'));
-            const tabBtn = document.querySelector(`.model-tab[data-tab="${tabName}"]`);
-            if (tabBtn) tabBtn.classList.add('active');
-        }
-    }
-}
-
-function toggleImageSettingsOrTab() {
-    const left = document.getElementById('imgSettingsLeft');
-    const right = document.getElementById('imgSettingsRight');
-    const isOpen = left.classList.contains('active');
-    if (isOpen) {
-        left.classList.remove('active');
-        right.classList.remove('active');
-    } else {
-        left.classList.add('active');
-        right.classList.add('active');
-        // Sync UI with saved values
-        const w = localStorage.getItem('birdsnest_img_width') || '1024';
-        const h = localStorage.getItem('birdsnest_img_height') || '1024';
-        document.querySelectorAll('.img-preset').forEach(btn => {
-            btn.classList.toggle('active',
-                btn.dataset.w === w && btn.dataset.h === h);
-        });
-        const q = localStorage.getItem('birdsnest_img_quant') || '8';
-        document.getElementById('imgSettingsQuant').value = q;
-        const lr = localStorage.getItem('birdsnest_img_lowram') === 'true';
-        document.getElementById('imgSettingsLowRam').checked = lr;
-    }
-}
-
-function setImagePreset(w, h) {
-    localStorage.setItem('birdsnest_img_width', w);
-    localStorage.setItem('birdsnest_img_height', h);
-    // Highlight active preset
-    document.querySelectorAll('.img-preset').forEach(btn => {
-        btn.classList.toggle('active',
-            btn.dataset.w === String(w) && btn.dataset.h === String(h));
-    });
-    updateHeaderBadges();
-    fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ width: w, height: h }),
-    }).catch(() => { });
-}
-
-async function warmModel() {
-    const btn = document.getElementById('warmModelBtn');
-    btn.classList.add('warming');
-    btn.textContent = '🔥 Warming...';
-    try {
-        const res = await fetch('/api/models/warm', { method: 'POST' });
-        const data = await res.json();
-        if (data.status === 'warm') {
-            btn.textContent = '✅ Warm!';
-            setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
-        } else {
-            btn.textContent = '⚠️ ' + (data.error || 'No model');
-            setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
-        }
-    } catch {
-        btn.textContent = '❌ Failed';
-        setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
-    }
-}
-
-function setImageLowRam(checked) {
-    localStorage.setItem('birdsnest_img_lowram', checked);
-    fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ low_ram: checked }),
-    }).catch(() => { });
-}
-
-// ── Iconographic Header Badge System ──────────────────
-function updateHeaderBadges() {
-    // ── LLM Badge ──
-    const llmBadge = document.getElementById('llmBadge');
-    const llmIcon = document.getElementById('llmIcon');
-    if (currentNickname && currentNickname !== "Bird's Nest" && currentNickname !== 'No model loaded') {
-        llmBadge.classList.add('active');
-        // Determine tier from cached model data
-        const models = window._cachedLocalModels || [];
-        const loaded = models.find(m => m.is_loaded);
-        let paramB = 0;
-        let hasThinking = false;
-        if (loaded) {
-            const sizeStr = loaded.size || '';
-            const match = sizeStr.match(/([\d.]+)\s*B/i);
-            if (match) paramB = parseFloat(match[1]);
-            hasThinking = loaded.thinking || false;
-        }
-        // Tier icon
-        let icon = paramB >= 7 ? '🔮' : paramB >= 2 ? '⚙️' : '🐣';
-        // Thinking indicator
-        if (hasThinking) icon += '🧠';
-        llmIcon.textContent = icon;
-        llmBadge.title = currentNickname + (hasThinking ? ' · Thinking' : '');
-    } else {
-        llmBadge.classList.remove('active');
-        llmIcon.textContent = '🤖';
-        llmBadge.title = 'No LLM loaded';
-    }
-
-    // ── Image Badge ──
-    const imgBadgeEl = document.getElementById('imgBadge');
-    const imgIconEl = document.getElementById('imgIcon');
-    const imgQuantDot = document.getElementById('imgQuant');
-    if (activeImageModel) {
-        imgBadgeEl.classList.add('active');
-        // Determine tier from catalog
-        const imgCatalog = window._cachedImageCatalog || [];
-        const activeImg = imgCatalog.find(m => m.id === activeImageModel);
-        let imgIcon = '🎨';
-        if (activeImg) {
-            if (activeImg.type === 'upscaler') imgIcon = '🔍';
-            else if (activeImg.steps <= 4) imgIcon = '⚡';
-            else if (activeImg.steps >= 20 || (activeImg.params && parseInt(activeImg.params) >= 9)) imgIcon = '🎥';
-        }
-        imgIconEl.textContent = imgIcon;
-        // Quant dot
-        const quant = localStorage.getItem('birdsnest_img_quant') || '8';
-        imgQuantDot.className = 'quant-dot ' + (quant === 'none' ? 'full' : quant === '8' ? 'int8' : quant === '4' ? 'int4' : 'int3');
-        // Tooltip
-        const qLabel = quant === 'none' ? 'Full' : 'int' + quant;
-        const w = localStorage.getItem('birdsnest_img_width') || '1024';
-        const h = localStorage.getItem('birdsnest_img_height') || '1024';
-        imgBadgeEl.title = (activeImg ? activeImg.name : activeImageModel) + ' · ' + qLabel + ' · ' + w + '×' + h;
-    } else {
-        imgBadgeEl.classList.remove('active');
-        imgIconEl.textContent = '🖌️';
-        imgQuantDot.className = 'quant-dot';
-        imgBadgeEl.title = 'No image model';
-    }
-
-    // ── Music Badge ──
-    const musicBadgeEl = document.getElementById('musicBadge');
-    const musicIconEl = document.getElementById('musicIcon');
-    const activeMusicModel = localStorage.getItem('birdsnest_music_model') || '';
-    if (activeMusicModel) {
-        musicBadgeEl.classList.add('active');
-        let musicIcon = '🎵';
-        if (activeMusicModel.includes('large')) musicIcon = '🎻';
-        else if (activeMusicModel.includes('medium')) musicIcon = '🎶';
-        musicIconEl.textContent = musicIcon;
-        musicBadgeEl.title = activeMusicModel;
-    } else {
-        musicBadgeEl.classList.remove('active');
-        musicIconEl.textContent = '🔇';
-        musicBadgeEl.title = 'No music model';
     }
 }
 
@@ -1054,9 +907,15 @@ async function loadImageModels() {
         const res = await fetch('/api/image-models');
         const data = await res.json();
         catalog = data.catalog || [];
-        window._cachedImageCatalog = catalog;
         installedRaw = data.installed_raw || [];
-        if (data.active) activeImageModel = data.active;
+        if (data.active) {
+            activeImageModel = data.active;
+            // Update header image badge
+            const imgInfo = (data.catalog || []).find(m => m.id === data.active);
+            const imgName = imgInfo ? imgInfo.name : data.active.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            document.getElementById('imgModelLabel').textContent = imgName;
+            document.getElementById('imgModelDot').className = 'model-dot active';
+        }
     } catch { }
 
     // Tab badge — count downloaded catalog models
@@ -1196,9 +1055,12 @@ async function selectImageModel(id) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: id }),
     });
+    // Update header badge
+    const label = id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    document.getElementById('imgModelLabel').textContent = label;
+    document.getElementById('imgModelDot').className = 'model-dot active';
     addSystemMessage(`Image model set to ${id}`);
     loadImageModels();
-    updateHeaderBadges();
 }
 
 async function unloadImageModel() {
@@ -1209,27 +1071,30 @@ async function unloadImageModel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: '' }),
     }).catch(() => { });
+    // Update header badge
+    document.getElementById('imgModelLabel').textContent = 'No image model';
+    document.getElementById('imgModelDot').className = 'model-dot dim';
     addSystemMessage('Image model unloaded');
     loadImageModels();
-    updateHeaderBadges();
 }
 
 // ── Image Performance Settings ──────────────────────────────────
 async function setImageQuantization(value) {
     localStorage.setItem('birdsnest_img_quant', value);
     const label = value === 'none' ? 'Full' : `int${value}`;
-    document.getElementById('imgQuantValue').textContent = label;
+    const select = document.getElementById('imgQuantSelect');
+    if (select) select.value = value;
     await fetch('/api/image-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantize: value, low_ram: document.getElementById('imgLowRamToggle').checked }),
+        body: JSON.stringify({ quantize: value, low_ram: document.getElementById('imgLowRamToggle')?.checked || false }),
     }).catch(() => { });
     addSystemMessage(`Image quantization set to ${label}`);
 }
 
 async function setImageLowRam(enabled) {
     localStorage.setItem('birdsnest_img_lowram', enabled);
-    const quantVal = document.getElementById('imgQuantSelect').value;
+    const quantVal = localStorage.getItem('birdsnest_img_quant') || '8';
     await fetch('/api/image-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1238,22 +1103,59 @@ async function setImageLowRam(enabled) {
     addSystemMessage(enabled ? '💾 Low-RAM mode enabled for image generation' : 'Low-RAM mode disabled');
 }
 
-function loadImageSettings() {
-    const quant = localStorage.getItem('birdsnest_img_quant') || '8';
-    const lowRam = localStorage.getItem('birdsnest_img_lowram') === 'true';
-    const select = document.getElementById('imgQuantSelect');
-    if (select) select.value = quant;
-    const label = quant === 'none' ? 'Full' : `int${quant}`;
-    const valEl = document.getElementById('imgQuantValue');
-    if (valEl) valEl.textContent = label;
-    const toggle = document.getElementById('imgLowRamToggle');
-    if (toggle) toggle.checked = lowRam;
-    // Sync with server
+function setImagePreset(w, h) {
+    localStorage.setItem('birdsnest_img_width', w);
+    localStorage.setItem('birdsnest_img_height', h);
+    // Update active button
+    document.querySelectorAll('.img-preset').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.w) === w && parseInt(btn.dataset.h) === h);
+    });
+    // Sync to server
     fetch('/api/image-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantize: quant, low_ram: lowRam }),
+        body: JSON.stringify({ width: w, height: h }),
     }).catch(() => { });
+    addSystemMessage(`Image resolution set to ${w}×${h}`);
+}
+
+function loadImageSettings() {
+    const quant = localStorage.getItem('birdsnest_img_quant') || '8';
+    const lowRam = localStorage.getItem('birdsnest_img_lowram') === 'true';
+    const width = parseInt(localStorage.getItem('birdsnest_img_width') || '1024');
+    const height = parseInt(localStorage.getItem('birdsnest_img_height') || '1024');
+    const select = document.getElementById('imgQuantSelect');
+    if (select) select.value = quant;
+    const toggle = document.getElementById('imgLowRamToggle');
+    if (toggle) toggle.checked = lowRam;
+    // Restore preset button highlight
+    document.querySelectorAll('.img-preset').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.w) === width && parseInt(btn.dataset.h) === height);
+    });
+    // Sync ALL settings with server
+    fetch('/api/image-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantize: quant, low_ram: lowRam, width: width, height: height }),
+    }).catch(() => { });
+}
+
+async function warmModel() {
+    const btn = document.getElementById('warmModelBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🔥 Warming...'; }
+    try {
+        const resp = await fetch('/api/models/warm', { method: 'POST' });
+        const data = await resp.json();
+        if (data.status === 'warm') {
+            addSystemMessage(`Model warmed in ${data.elapsed_s}s — first response will be fast`);
+        } else {
+            addSystemMessage(`⚠️ Warm failed: ${data.error || 'No model loaded'}`);
+        }
+    } catch (e) {
+        addSystemMessage('⚠️ Could not warm model');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔥 Warm Model'; }
+    }
 }
 
 async function unloadMusicModel() {
@@ -1872,19 +1774,17 @@ function fireToolCard(card) {
     }
 
     if (type === 'input') {
-        // Toggle active state
-        const wasActive = card.classList.contains('active');
-
-        // Close all other active cards
-        document.querySelectorAll('.tool-card.active').forEach(c => c.classList.remove('active'));
-
-        if (!wasActive) {
-            card.classList.add('active');
-            // Focus the input after animation
-            const input = card.querySelector('.tool-input');
-            if (input) {
-                setTimeout(() => input.focus(), 200);
-            }
+        // Populate chat input with the prefix and focus it
+        const prefix = card.dataset.prefix || '';
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) {
+            chatInput.value = prefix;
+            chatInput.focus();
+            // Move cursor to end
+            chatInput.setSelectionRange(prefix.length, prefix.length);
+            autoResize(chatInput);
+            // Enable send button
+            document.getElementById('sendBtn').disabled = false;
         }
         return;
     }
