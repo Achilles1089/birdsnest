@@ -1959,10 +1959,13 @@ def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: st
         audio_end_in_s=duration,
     ).audios[0]
 
-    # audio is a numpy array, save as WAV
+    # audio may be a torch Tensor or numpy array depending on diffusers version
+    import numpy as np
     sample_rate = entry.get("sample_rate", 44100)
+    if hasattr(audio, 'cpu'):
+        audio = audio.cpu().float().numpy()
     # Normalize to int16 range
-    audio_int16 = (audio * 32767).astype("int16")
+    audio_int16 = (audio * 32767).astype(np.int16)
     if audio_int16.ndim > 1:
         audio_int16 = audio_int16[0]  # Take first channel if stereo
 
