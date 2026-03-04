@@ -489,7 +489,11 @@ async def download_music_model(request: Request):
     try:
         from huggingface_hub import snapshot_download
         t0 = time.time()
-        snapshot_download(entry["hf_repo"])
+        # Skip redundant .ckpt files (safetensors preferred), CSVs, and images
+        snapshot_download(
+            entry["hf_repo"],
+            ignore_patterns=["*.ckpt", "*.csv", "*.png", "*.jpg"],
+        )
         elapsed = time.time() - t0
         return {"status": "downloaded", "model": model_id, "time": round(elapsed, 1)}
     except Exception as e:

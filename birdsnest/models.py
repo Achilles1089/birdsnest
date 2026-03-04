@@ -566,7 +566,7 @@ MUSIC_MODEL_CATALOG = [
         "display_name": "Stable Audio Open 🎵",
         "engine": "stable-audio",
         "hf_repo": "stabilityai/stable-audio-open-1.0",
-        "size_gb": 1.2,
+        "size_gb": 3.1,
         "max_duration": 47,
         "sample_rate": 44100,
         "description": "High-quality music & sound effects — up to 47s, 44.1kHz",
