@@ -888,11 +888,10 @@ function toggleImageSettingsOrTab() {
         // Sync UI with saved values
         const w = localStorage.getItem('birdsnest_img_width') || '1024';
         const h = localStorage.getItem('birdsnest_img_height') || '1024';
-        document.getElementById('imgWidthSlider').value = w;
-        document.getElementById('imgWidthVal').textContent = w;
-        document.getElementById('imgHeightSlider').value = h;
-        document.getElementById('imgHeightVal').textContent = h;
-        document.getElementById('imgDimSummary').textContent = w + ' × ' + h;
+        document.querySelectorAll('.img-preset').forEach(btn => {
+            btn.classList.toggle('active',
+                btn.dataset.w === w && btn.dataset.h === h);
+        });
         const q = localStorage.getItem('birdsnest_img_quant') || '8';
         document.getElementById('imgSettingsQuant').value = q;
         const lr = localStorage.getItem('birdsnest_img_lowram') === 'true';
@@ -900,32 +899,40 @@ function toggleImageSettingsOrTab() {
     }
 }
 
-function setImageWidth(v) {
-    localStorage.setItem('birdsnest_img_width', v);
-    document.getElementById('imgWidthVal').textContent = v;
-    const h = document.getElementById('imgHeightSlider').value;
-    document.getElementById('imgDimSummary').textContent = v + ' × ' + h;
+function setImagePreset(w, h) {
+    localStorage.setItem('birdsnest_img_width', w);
+    localStorage.setItem('birdsnest_img_height', h);
+    // Highlight active preset
+    document.querySelectorAll('.img-preset').forEach(btn => {
+        btn.classList.toggle('active',
+            btn.dataset.w === String(w) && btn.dataset.h === String(h));
+    });
     updateHeaderBadges();
-    // Send to server
     fetch('/api/image-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ width: parseInt(v), height: parseInt(h) }),
+        body: JSON.stringify({ width: w, height: h }),
     }).catch(() => { });
 }
 
-function setImageHeight(v) {
-    localStorage.setItem('birdsnest_img_height', v);
-    document.getElementById('imgHeightVal').textContent = v;
-    const w = document.getElementById('imgWidthSlider').value;
-    document.getElementById('imgDimSummary').textContent = w + ' × ' + v;
-    updateHeaderBadges();
-    // Send to server
-    fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ width: parseInt(w), height: parseInt(v) }),
-    }).catch(() => { });
+async function warmModel() {
+    const btn = document.getElementById('warmModelBtn');
+    btn.classList.add('warming');
+    btn.textContent = '🔥 Warming...';
+    try {
+        const res = await fetch('/api/models/warm', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'warm') {
+            btn.textContent = '✅ Warm!';
+            setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
+        } else {
+            btn.textContent = '⚠️ ' + (data.error || 'No model');
+            setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
+        }
+    } catch {
+        btn.textContent = '❌ Failed';
+        setTimeout(() => { btn.textContent = '🔥 Warm Model'; btn.classList.remove('warming'); }, 2000);
+    }
 }
 
 function setImageLowRam(checked) {

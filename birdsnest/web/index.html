@@ -524,19 +524,20 @@
     <div class="input-zone">
         <div class="img-settings-panel left" id="imgSettingsLeft">
             <div class="img-settings-title">📐 Resolution</div>
-            <div class="img-slider-row">
-                <label>Width</label>
-                <input type="range" id="imgWidthSlider" min="256" max="1536" step="64" value="1024"
-                    oninput="setImageWidth(this.value)">
-                <span class="img-slider-val" id="imgWidthVal">1024</span>
+            <div class="img-preset-grid" id="imgPresetGrid">
+                <button class="img-preset" onclick="setImagePreset(512,512)" data-w="512" data-h="512">512²</button>
+                <button class="img-preset" onclick="setImagePreset(768,768)" data-w="768" data-h="768">768²</button>
+                <button class="img-preset active" onclick="setImagePreset(1024,1024)" data-w="1024"
+                    data-h="1024">1024²</button>
+                <button class="img-preset" onclick="setImagePreset(512,768)" data-w="512" data-h="768">512×768</button>
+                <button class="img-preset" onclick="setImagePreset(768,512)" data-w="768" data-h="512">768×512</button>
+                <button class="img-preset" onclick="setImagePreset(768,1024)" data-w="768"
+                    data-h="1024">768×1024</button>
+                <button class="img-preset" onclick="setImagePreset(1024,768)" data-w="1024"
+                    data-h="768">1024×768</button>
+                <button class="img-preset" onclick="setImagePreset(1024,1536)" data-w="1024"
+                    data-h="1536">1024×1536</button>
             </div>
-            <div class="img-slider-row">
-                <label>Height</label>
-                <input type="range" id="imgHeightSlider" min="256" max="1536" step="64" value="1024"
-                    oninput="setImageHeight(this.value)">
-                <span class="img-slider-val" id="imgHeightVal">1024</span>
-            </div>
-            <div class="img-dim-summary" id="imgDimSummary">1024 × 1024</div>
         </div>
 
         <div class="input-area">
@@ -584,6 +585,8 @@
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+            <button class="warm-btn" id="warmModelBtn" onclick="warmModel()"
+                title="Run a warm-up pass to eliminate first-message delay">🔥 Warm Model</button>
         </div>
     </div>
 

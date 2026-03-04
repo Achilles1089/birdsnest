@@ -623,6 +623,25 @@ async def reset_conversation():
         return {"status": "reset"}
     raise HTTPException(400, "No model loaded")
 
+@app.post("/api/models/warm")
+async def warm_model():
+    """Run a warm-up pass to prime JIT caches and eliminate first-message latency."""
+    if not active_engine or not active_engine.is_loaded:
+        return {"status": "no_model", "error": "No model loaded"}
+    try:
+        import time
+        t0 = time.time()
+        # Run a tiny generation to prime the state
+        for _ in active_engine.generate_stream("Hi", temperature=1.0, top_p=0.7, max_tokens=1):
+            pass
+        # Reset state so the warm-up doesn't pollute conversation
+        if hasattr(active_engine, 'reset'):
+            active_engine.reset()
+        elapsed = round(time.time() - t0, 2)
+        return {"status": "warm", "elapsed_s": elapsed}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 @app.get("/api/status")
 async def get_status():
     """System status."""
