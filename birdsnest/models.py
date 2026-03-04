@@ -521,6 +521,7 @@ IMAGE_MODEL_CATALOG = [
         "display_name": "SDXL Lightning ⚡⚡",
         "engine": "diffusers",
         "hf_repo": "stabilityai/stable-diffusion-xl-base-1.0",
+        "lora_repo": "ByteDance/SDXL-Lightning",
         "default_steps": 4,
         "size_gb": 6.5,
         "quantized_size_gb": 6.5,

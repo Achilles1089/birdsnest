@@ -215,7 +215,7 @@ async def list_image_models():
     # Scan HF cache for all downloaded models
     installed_repos = set()
     installed_raw = []
-    for prefix in ["black-forest-labs", "FLUX", "mflux", "Tongyi", "briaai", "ByteDance"]:
+    for prefix in ["black-forest-labs", "FLUX", "mflux", "Tongyi", "briaai", "ByteDance", "stabilityai"]:
         for m in _scan_hf_cache(prefix):
             if m["dir_name"] not in {x["dir_name"] for x in installed_raw}:
                 installed_raw.append(m)
@@ -242,6 +242,7 @@ async def list_image_models():
             "hf_repo": hf_repo,
             "installed": is_installed,
             "legacy": entry.get("legacy", False),
+            "engine": entry.get("engine", "mflux"),
             "type": "upscaler" if "upscale" in entry.get("capabilities", []) else "generator",
         })
 
@@ -271,10 +272,17 @@ async def download_image_model(request: Request):
         loop = asyncio.get_running_loop()
 
         def _download():
-            return snapshot_download(
+            snapshot_download(
                 repo_id=hf_repo,
                 local_dir_use_symlinks=True,
             )
+            # Also download LoRA weights if model requires them
+            lora_repo = entry.get("lora_repo")
+            if lora_repo:
+                snapshot_download(
+                    repo_id=lora_repo,
+                    local_dir_use_symlinks=True,
+                )
 
         t0 = time.time()
         await loop.run_in_executor(None, _download)

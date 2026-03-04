@@ -7,7 +7,7 @@
     <title>Bird's Nest — Local AI Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 
 <body>
@@ -203,8 +203,8 @@
         <!-- Image Models Tab -->
         <div class="tab-content" id="tabImage">
             <div class="panel-section">
-                <h3>Active Model</h3>
-                <div id="activeImageModel" class="empty-state">Flux Schnell (default)</div>
+                <h3>Loaded</h3>
+                <div id="activeImageModel" class="empty-state">No image model loaded</div>
             </div>
             <div class="panel-section">
                 <h3>Downloaded</h3>
@@ -229,8 +229,8 @@
                             data-h="1536">1024×1536</button>
                     </div>
                 </div>
-                <button class="warm-btn" id="warmModelBtn" onclick="warmModel()"
-                    title="Run a warm-up pass to eliminate first-message delay">🔥 Warm Model</button>
+                <button class="warm-btn" id="warmImageBtn" onclick="warmImageEngine()"
+                    title="Pre-load image model into GPU memory for fast generation">🔥 Warm Image Engine</button>
             </div>
 
             <div class="panel-section">
@@ -474,7 +474,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=4"></script>
+    <script src="/static/app.js?v=5"></script>
 </body>
 
 </html>

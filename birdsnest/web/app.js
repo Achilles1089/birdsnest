@@ -910,20 +910,101 @@ async function loadImageModels() {
         installedRaw = data.installed_raw || [];
         if (data.active) {
             activeImageModel = data.active;
-            // Update header image badge
-            const imgInfo = (data.catalog || []).find(m => m.id === data.active);
+            const imgInfo = catalog.find(m => m.id === data.active);
             const imgName = imgInfo ? imgInfo.name : data.active.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             document.getElementById('imgModelLabel').textContent = imgName;
             document.getElementById('imgModelDot').className = 'model-dot active';
         }
     } catch { }
 
-    // Tab badge — count downloaded catalog models
+    // Tab badge
     const downloadedCount = catalog.filter(m => m.installed).length;
     const imgBadge = document.getElementById('badgeImage');
     if (imgBadge) imgBadge.textContent = downloadedCount || '';
 
-    // ── ACTIVE MODEL (matches RWKV "loadedModelSection" pattern) ──
+    // ── Engine group config ──
+    const engineGroups = {
+        diffusers: { label: 'SDXL', icon: '⚡', type: 'Diffusers', desc: 'Ultra-fast distilled models via PyTorch MPS', color: '#f59e0b' },
+        mflux: { label: 'FLUX / MLX', icon: '🔥', type: 'mflux', desc: 'High-quality Apple Silicon native models', color: '#7c6aef' },
+    };
+
+    // ── Helper: render one image model card ──
+    function imgCard(m, mode) {
+        const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
+        const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
+
+        let actions = '';
+        if (mode === 'downloaded') {
+            const rawMatch = installedRaw.find(r => {
+                const repoLower = (m.hf_repo || '').toLowerCase();
+                const idLower = (r.id || '').toLowerCase();
+                return repoLower.includes(idLower) || idLower.includes(repoLower.split('/').pop());
+            });
+            const deleteBtn = rawMatch
+                ? `<button class="btn btn-danger" onclick="deleteHfModel('image', '${rawMatch.dir_name}', '${m.name}')">Delete</button>`
+                : '';
+            actions = `
+                <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
+                ${deleteBtn}`;
+        } else {
+            actions = `
+                <button class="btn btn-download" onclick="downloadImageModel('${m.id}', this)">
+                    Download (${m.size_gb} GB)
+                </button>`;
+        }
+
+        return `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${m.name}</span>
+                    <div class="model-card-badges">
+                        <span class="badge badge-arch">${m.params || ''}</span>
+                        <span class="badge badge-size">${m.steps} steps</span>
+                        ${imgSizeBadge(m)}
+                        ${legacyBadge}${typeBadge}
+                    </div>
+                </div>
+                <div class="model-card-desc">${m.desc}</div>
+                <div class="model-card-actions">${actions}</div>
+            </div>`;
+    }
+
+    // ── Helper: render grouped list ──
+    function renderGrouped(models, mode) {
+        const groups = {};
+        models.forEach(m => {
+            const eng = m.engine || 'mflux';
+            if (!groups[eng]) groups[eng] = [];
+            groups[eng].push(m);
+        });
+
+        let html = '';
+        // Show diffusers first (speed models), then mflux
+        for (const eng of ['diffusers', 'mflux']) {
+            const items = groups[eng];
+            if (!items || items.length === 0) continue;
+            const g = engineGroups[eng] || engineGroups.mflux;
+
+            html += `
+                <div class="arch-group">
+                    <div class="arch-header">
+                        <span class="arch-dot" style="background: ${g.color}"></span>
+                        <span class="arch-label">${g.label}</span>
+                        <span class="arch-type">${g.type}</span>
+                    </div>
+                    <div class="arch-desc">${g.desc}</div>
+                    <details class="model-subgroup" open>
+                        <summary class="subgroup-header">${g.icon} ${g.label} Models <span class="subgroup-count">${items.length}</span></summary>
+                        <div class="subgroup-content">
+                            ${items.map(m => imgCard(m, mode)).join('')}
+                        </div>
+                    </details>
+                </div>`;
+        }
+        return html;
+    }
+
+    // ── LOADED section ──
     const activeSection = document.getElementById('activeImageModel');
     const active = catalog.find(m => m.id === activeImageModel);
     if (active && active.installed) {
@@ -942,83 +1023,28 @@ async function loadImageModels() {
                 <div class="model-card-actions">
                     <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     } else {
         activeSection.className = 'empty-state';
-        activeSection.textContent = 'No image model selected';
+        activeSection.textContent = 'No image model loaded';
     }
 
-    // ── DOWNLOADED — installed catalog models, not the active one (matches RWKV "localModelsList") ──
-    // These get "Select" + "Delete" — same as RWKV's "Load" + "Delete"
+    // ── DOWNLOADED section — collapsible by engine ──
     const installedSection = document.getElementById('imageInstalledList');
     const downloaded = catalog.filter(m => m.installed && m.id !== activeImageModel);
-
     if (downloaded.length === 0) {
         installedSection.innerHTML = '<div class="empty-state">No downloaded image models</div>';
     } else {
-        installedSection.innerHTML = downloaded.map(m => {
-            const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
-            const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
-            // Find the matching raw HF cache entry for delete
-            const rawMatch = installedRaw.find(r => {
-                const repoLower = (m.hf_repo || '').toLowerCase();
-                const idLower = (r.id || '').toLowerCase();
-                return repoLower.includes(idLower) || idLower.includes(repoLower.split('/').pop());
-            });
-            const deleteBtn = rawMatch
-                ? `<button class="btn btn-danger" onclick="deleteHfModel('image', '${rawMatch.dir_name}', '${m.name}')">Delete</button>`
-                : '';
-            return `
-            <div class="model-card">
-                <div class="model-card-header">
-                    <span class="model-card-name">${m.name}</span>
-                    <div class="model-card-badges">
-                        <span class="badge badge-arch">${m.params || ''}</span>
-                        <span class="badge badge-size">${m.steps} steps</span>
-                        ${imgSizeBadge(m)}
-                        ${legacyBadge}${typeBadge}
-                    </div>
-                </div>
-                <div class="model-card-desc">${m.desc}</div>
-                <div class="model-card-actions">
-                    <button class="btn btn-primary" onclick="selectImageModel('${m.id}')">Select</button>
-                    ${deleteBtn}
-                </div>
-            </div>`;
-        }).join('');
+        installedSection.innerHTML = renderGrouped(downloaded, 'downloaded');
     }
 
-    // ── AVAILABLE — catalog models NOT downloaded (matches RWKV "catalogModelsList") ──
-    // These only get "Download (X GB)" button
+    // ── AVAILABLE TO DOWNLOAD — collapsible by engine ──
     const list = document.getElementById('imageModelsList');
     const notDownloaded = catalog.filter(m => !m.installed);
-
     if (notDownloaded.length === 0) {
         list.innerHTML = '<div class="empty-state">All image models downloaded!</div>';
     } else {
-        list.innerHTML = notDownloaded.map(m => {
-            const legacyBadge = m.legacy ? '<span class="badge" style="background:#f59e0b;color:#000;font-size:9px">LEGACY</span>' : '';
-            const typeBadge = m.type === 'upscaler' ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:9px">UPSCALER</span>' : '';
-            return `
-            <div class="model-card">
-                <div class="model-card-header">
-                    <span class="model-card-name">${m.name}</span>
-                    <div class="model-card-badges">
-                        <span class="badge badge-arch">${m.params || ''}</span>
-                        <span class="badge badge-size">${m.steps} steps</span>
-                        ${imgSizeBadge(m)}
-                        ${legacyBadge}${typeBadge}
-                    </div>
-                </div>
-                <div class="model-card-desc">${m.desc}</div>
-                <div class="model-card-actions">
-                    <button class="btn btn-download" onclick="downloadImageModel('${m.id}', this)">
-                        Download (${m.size_gb} GB)
-                    </button>
-                </div>
-            </div>`;
-        }).join('');
+        list.innerHTML = renderGrouped(notDownloaded, 'available');
     }
 }
 
@@ -1110,21 +1136,24 @@ function loadImageSettings() {
     }).catch(() => { });
 }
 
-async function warmModel() {
-    const btn = document.getElementById('warmModelBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '🔥 Warming...'; }
+async function warmImageEngine() {
+    const btn = document.getElementById('warmImageBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🔥 Loading...'; }
     try {
-        const resp = await fetch('/api/models/warm', { method: 'POST' });
+        const resp = await fetch('/api/image-engine/warm', { method: 'POST' });
         const data = await resp.json();
         if (data.status === 'warm') {
-            addSystemMessage(`Model warmed in ${data.elapsed_s}s — first response will be fast`);
+            const model = data.model || 'unknown';
+            const elapsed = data.elapsed ? `${data.elapsed}s` : '';
+            const loadTime = data.engine?.load_time ? ` (loaded in ${data.engine.load_time}s)` : '';
+            addSystemMessage(`🔥 Image engine ready — ${model} Q4 in GPU memory${loadTime}. Generation will be fast.`);
         } else {
-            addSystemMessage(`⚠️ Warm failed: ${data.error || 'No model loaded'}`);
+            addSystemMessage(`⚠️ Image warm failed: ${data.error || 'Unknown error'}`);
         }
     } catch (e) {
-        addSystemMessage('⚠️ Could not warm model');
+        addSystemMessage('⚠️ Could not warm image engine');
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '🔥 Warm Model'; }
+        if (btn) { btn.disabled = false; btn.textContent = '🔥 Warm Image Engine'; }
     }
 }
 
