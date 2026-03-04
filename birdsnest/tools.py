@@ -1936,7 +1936,7 @@ def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: st
     old_limit = sys.getrecursionlimit()
     sys.setrecursionlimit(max(old_limit, 3000))
 
-    from diffusers import StableAudioPipeline
+    from diffusers import StableAudioPipeline, EulerDiscreteScheduler
 
     filename = f"music_{timestamp}.wav"
     filepath = WORKSPACE_DIR / filename
@@ -1947,6 +1947,10 @@ def _generate_stable_audio(prompt: str, duration: float, entry: dict, device: st
         entry["hf_repo"],
         torch_dtype=dtype,
     ).to(device)
+
+    # Override scheduler — default CosineDPMSolverMultistepScheduler triggers
+    # infinite recursion in torchsde's Brownian interval tree on Python 3.14
+    pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
 
     audio = pipe(
         prompt,
