@@ -1007,7 +1007,10 @@ async function loadImageModels() {
     // ── LOADED section ──
     const activeSection = document.getElementById('activeImageModel');
     const active = catalog.find(m => m.id === activeImageModel);
-    if (active && active.installed) {
+    if (active) {
+        const notDownloadedNote = !active.installed
+            ? `<div class="model-card-desc" style="color:var(--yellow)">⚠ Will auto-download on first generation</div>`
+            : '';
         activeSection.className = '';
         activeSection.innerHTML = `
             <div class="model-card">
@@ -1020,6 +1023,19 @@ async function loadImageModels() {
                     </div>
                 </div>
                 <div class="model-card-desc">${active.desc}</div>
+                ${notDownloadedNote}
+                <div class="model-card-actions">
+                    <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
+                </div>
+            </div>`;
+    } else if (activeImageModel) {
+        // Selected model not in catalog (edge case)
+        activeSection.className = '';
+        activeSection.innerHTML = `
+            <div class="model-card">
+                <div class="model-card-header">
+                    <span class="model-card-name">${activeImageModel}</span>
+                </div>
                 <div class="model-card-actions">
                     <button class="btn btn-secondary" onclick="unloadImageModel()">Unload</button>
                 </div>
