@@ -349,13 +349,13 @@ class DiffusersEngine:
 
             try:
                 import torch
-                from diffusers import AutoPipelineForText2Image
+                from diffusers import StableDiffusionXLPipeline
 
                 device = "mps" if torch.backends.mps.is_available() else "cpu"
                 dtype = torch.float16 if device == "mps" else torch.float32
 
-                # Load base pipeline
-                pipe = AutoPipelineForText2Image.from_pretrained(
+                # Load base pipeline (direct import avoids HunyuanDiT/MT5 dep chain)
+                pipe = StableDiffusionXLPipeline.from_pretrained(
                     reg["hf_repo"],
                     torch_dtype=dtype,
                     variant="fp16" if dtype == torch.float16 else None,
