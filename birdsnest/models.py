@@ -337,19 +337,6 @@ IMAGE_MODEL_CATALOG = [
         "capabilities": ["generate", "img2img", "lora"],
         "description": "Fastest high-quality — 9 steps, distilled 6B, bilingual text rendering",
     },
-    {
-        "id": "z-image",
-        "name": "Z-Image",
-        "display_name": "Z-Image (Base)",
-        "cli_command": "mflux-generate-z-image",
-        "hf_repo": "Tongyi-MAI/Z-Image",
-        "default_steps": 20,
-        "size_gb": 12.0,
-        "quantized_size_gb": 4.0,
-        "params": "6B",
-        "capabilities": ["generate", "img2img", "lora"],
-        "description": "Full 6B base model — 20 steps, highest Z-Image quality",
-    },
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  FLUX.2 — Black Forest Labs, 4B & 9B params, Jan 2026

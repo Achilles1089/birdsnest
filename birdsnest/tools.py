@@ -1742,15 +1742,14 @@ def tool_generate_image(args: Dict) -> str:
 
     # Read active image model from config
     model_config_path = WORKSPACE_DIR / ".birdsnest_image_model"
-    selected_model = "schnell"
+    selected_model = "z-image-turbo"
     if model_config_path.exists():
-        selected_model = model_config_path.read_text().strip() or "schnell"
+        selected_model = model_config_path.read_text().strip() or "z-image-turbo"
 
     # ── CLI mapping: each model family has its own mflux command ──
     IMAGE_MODEL_CLI = {
         # Z-Image (6B)
         'z-image-turbo': {'cmd': 'mflux-generate-z-image-turbo', 'default_steps': 9},
-        'z-image':        {'cmd': 'mflux-generate-z-image', 'default_steps': 20},
         # FLUX.2 Klein (4B/9B)
         'flux2-klein-4b': {'cmd': 'mflux-generate-flux2', 'default_steps': 4, 'args': ['--model-version', '4b']},
         'flux2-klein-9b': {'cmd': 'mflux-generate-flux2', 'default_steps': 8, 'args': ['--model-version', '9b']},
@@ -1768,7 +1767,7 @@ def tool_generate_image(args: Dict) -> str:
         'kontext':        {'cmd': 'mflux-generate-kontext', 'default_steps': 20},
     }
 
-    model_info = IMAGE_MODEL_CLI.get(selected_model, IMAGE_MODEL_CLI['schnell'])
+    model_info = IMAGE_MODEL_CLI.get(selected_model, IMAGE_MODEL_CLI['z-image-turbo'])
     cli_cmd = model_info['cmd']
     default_steps = model_info['default_steps']
     extra_args = model_info.get('args', [])
@@ -1778,15 +1777,9 @@ def tool_generate_image(args: Dict) -> str:
     # Resolve the full path to the mflux CLI command
     resolved_cmd = _resolve_mflux_cmd(cli_cmd)
 
-    # Check if mflux CLI command is available
-    try:
-        check = subprocess.run(
-            [resolved_cmd, "--help"],
-            capture_output=True, text=True, timeout=5
-        )
-        if check.returncode != 0:
-            raise FileNotFoundError
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    # Verify the command exists (fast shutil.which check, no subprocess)
+    import shutil as _shutil
+    if not _shutil.which(resolved_cmd):
         return (
             f"mflux command '{cli_cmd}' not found.\n"
             f"Install with: pip install mflux\n"
