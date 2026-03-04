@@ -1079,30 +1079,6 @@ async function unloadImageModel() {
 }
 
 // ── Image Performance Settings ──────────────────────────────────
-async function setImageQuantization(value) {
-    localStorage.setItem('birdsnest_img_quant', value);
-    const label = value === 'none' ? 'Full' : `int${value}`;
-    const select = document.getElementById('imgQuantSelect');
-    if (select) select.value = value;
-    await fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantize: value, low_ram: document.getElementById('imgLowRamToggle')?.checked || false }),
-    }).catch(() => { });
-    addSystemMessage(`Image quantization set to ${label}`);
-}
-
-async function setImageLowRam(enabled) {
-    localStorage.setItem('birdsnest_img_lowram', enabled);
-    const quantVal = localStorage.getItem('birdsnest_img_quant') || '8';
-    await fetch('/api/image-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantize: quantVal, low_ram: enabled }),
-    }).catch(() => { });
-    addSystemMessage(enabled ? '💾 Low-RAM mode enabled for image generation' : 'Low-RAM mode disabled');
-}
-
 function setImagePreset(w, h) {
     localStorage.setItem('birdsnest_img_width', w);
     localStorage.setItem('birdsnest_img_height', h);
@@ -1120,23 +1096,17 @@ function setImagePreset(w, h) {
 }
 
 function loadImageSettings() {
-    const quant = localStorage.getItem('birdsnest_img_quant') || '8';
-    const lowRam = localStorage.getItem('birdsnest_img_lowram') === 'true';
     const width = parseInt(localStorage.getItem('birdsnest_img_width') || '1024');
     const height = parseInt(localStorage.getItem('birdsnest_img_height') || '1024');
-    const select = document.getElementById('imgQuantSelect');
-    if (select) select.value = quant;
-    const toggle = document.getElementById('imgLowRamToggle');
-    if (toggle) toggle.checked = lowRam;
     // Restore preset button highlight
     document.querySelectorAll('.img-preset').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.w) === width && parseInt(btn.dataset.h) === height);
     });
-    // Sync ALL settings with server
+    // Sync resolution with server
     fetch('/api/image-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantize: quant, low_ram: lowRam, width: width, height: height }),
+        body: JSON.stringify({ width: width, height: height }),
     }).catch(() => { });
 }
 

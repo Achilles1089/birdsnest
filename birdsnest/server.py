@@ -305,8 +305,6 @@ async def delete_image_model(dir_name: str):
 
 
 # ── Image performance settings ────────────────────────────────────────────────
-image_quantize = "8"   # Default: int8 quantization
-image_low_ram = False
 image_style_preset = "none"
 image_style_intensity = 2  # 1=Subtle, 2=Normal, 3=Strong
 image_width = 1024
@@ -314,17 +312,15 @@ image_height = 1024
 
 @app.post("/api/image-settings")
 async def set_image_settings(request: Request):
-    global image_quantize, image_low_ram, image_style_preset, image_style_intensity, image_width, image_height
+    global image_style_preset, image_style_intensity, image_width, image_height
     data = await request.json()
-    image_quantize = data.get("quantize", image_quantize)
-    image_low_ram = data.get("low_ram", image_low_ram)
     image_style_preset = data.get("style_preset", image_style_preset)
     image_style_intensity = data.get("style_intensity", image_style_intensity)
     if "width" in data:
         image_width = int(data["width"])
     if "height" in data:
         image_height = int(data["height"])
-    return {"success": True, "quantize": image_quantize, "low_ram": image_low_ram,
+    return {"success": True,
             "style_preset": image_style_preset, "style_intensity": image_style_intensity,
             "width": image_width, "height": image_height}
 

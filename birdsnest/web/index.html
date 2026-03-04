@@ -235,25 +235,6 @@
                             data-h="1536">1024×1536</button>
                     </div>
                 </div>
-                <div class="img-setting-group">
-                    <label class="img-setting-label">Quantization</label>
-                    <select id="imgQuantSelect" class="setting-select" onchange="setImageQuantization(this.value)">
-                        <option value="none">Full Precision (slowest, best quality)</option>
-                        <option value="8" selected>int8 — Fast (recommended)</option>
-                        <option value="4">int4 — Faster (slight quality loss)</option>
-                        <option value="3">int3 — Fastest (noticeable quality loss)</option>
-                    </select>
-                </div>
-                <div class="img-setting-group">
-                    <div class="setting-row">
-                        <label>Low-RAM Mode</label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="imgLowRamToggle" onchange="setImageLowRam(this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    <small class="setting-hint">Constrains memory. Enable on Macs with ≤16GB RAM.</small>
-                </div>
                 <button class="warm-btn" id="warmModelBtn" onclick="warmModel()"
                     title="Run a warm-up pass to eliminate first-message delay">🔥 Warm Model</button>
             </div>

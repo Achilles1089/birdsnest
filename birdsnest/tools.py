@@ -1804,15 +1804,8 @@ def tool_generate_image(args: Dict) -> str:
         "--height", str(height),
     ] + extra_args
 
-    # Apply performance settings from server config
-    try:
-        from birdsnest.server import image_quantize, image_low_ram
-        if image_quantize and image_quantize != "none":
-            cmd.extend(["--quantize", str(image_quantize)])
-        if image_low_ram:
-            cmd.append("--low-ram")
-    except ImportError:
-        cmd.extend(["--quantize", "8"])
+    # No quantization — run at full precision for best quality
+    # Speed/quality tradeoff handled by model selection (turbo vs base vs dev)
 
     try:
         t0 = time.time()
