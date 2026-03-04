@@ -498,6 +498,36 @@ IMAGE_MODEL_CATALOG = [
         "description": "Image editing via text — style transfer, character consistency, in-context gen",
         "legacy": True,
     },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  SDXL — Stability AI / ByteDance, 3.5B params, Distilled for Speed
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "sdxl-turbo",
+        "name": "SDXL Turbo",
+        "display_name": "SDXL Turbo ⚡",
+        "engine": "diffusers",
+        "hf_repo": "stabilityai/sdxl-turbo",
+        "default_steps": 1,
+        "size_gb": 6.5,
+        "quantized_size_gb": 6.5,
+        "params": "3.5B",
+        "capabilities": ["generate"],
+        "description": "Fastest — 1 step, 512² only, adversarial distillation, real-time generation",
+    },
+    {
+        "id": "sdxl-lightning",
+        "name": "SDXL Lightning",
+        "display_name": "SDXL Lightning ⚡⚡",
+        "engine": "diffusers",
+        "hf_repo": "stabilityai/stable-diffusion-xl-base-1.0",
+        "default_steps": 4,
+        "size_gb": 6.5,
+        "quantized_size_gb": 6.5,
+        "params": "3.5B + LoRA",
+        "capabilities": ["generate"],
+        "description": "Ultra-fast 1024² — 4 steps, ByteDance Lightning LoRA, best speed/quality ratio",
+    },
 ]
 
 

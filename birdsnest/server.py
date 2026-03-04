@@ -251,40 +251,43 @@ async def list_image_models():
 @app.post("/api/image-models/download")
 async def download_image_model(request: Request):
     """Pre-download an image model from HuggingFace."""
-    data = await request.json()
-    model_id = data.get("model_id", "")
-
-    entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
-    if not entry:
-        raise HTTPException(400, f"Unknown image model: {model_id}")
-
-    hf_repo = entry.get("hf_repo")
-    if not hf_repo:
-        raise HTTPException(400, f"No HF repo for model: {model_id}")
-
     try:
-        from huggingface_hub import snapshot_download
-    except ImportError:
-        raise HTTPException(500, "huggingface_hub not installed")
+        data = await request.json()
+        model_id = data.get("model_id", "")
 
-    loop = asyncio.get_running_loop()
+        entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
+        if not entry:
+            return {"status": "error", "message": f"Unknown image model: {model_id}"}
 
-    def _download():
-        return snapshot_download(
-            repo_id=hf_repo,
-            local_dir_use_symlinks=True,
-        )
+        hf_repo = entry.get("hf_repo")
+        if not hf_repo:
+            return {"status": "error", "message": f"No HF repo for model: {model_id}"}
 
-    t0 = time.time()
-    await loop.run_in_executor(None, _download)
-    elapsed = time.time() - t0
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
+            return {"status": "error", "message": "huggingface_hub not installed. Run: pip install huggingface_hub"}
 
-    return {
-        "status": "downloaded",
-        "model_id": model_id,
-        "size_gb": entry.get("size_gb", 0),
-        "time": round(elapsed, 1),
-    }
+        loop = asyncio.get_running_loop()
+
+        def _download():
+            return snapshot_download(
+                repo_id=hf_repo,
+                local_dir_use_symlinks=True,
+            )
+
+        t0 = time.time()
+        await loop.run_in_executor(None, _download)
+        elapsed = time.time() - t0
+
+        return {
+            "status": "downloaded",
+            "model_id": model_id,
+            "size_gb": entry.get("size_gb", 0),
+            "time": round(elapsed, 1),
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Download failed: {str(e)}"}
 
 
 @app.post("/api/image-models/select")
@@ -302,6 +305,47 @@ async def select_image_model(request: Request):
 async def delete_image_model(dir_name: str):
     """Delete a cached image model from HF hub cache."""
     return _delete_hf_model(dir_name)
+
+
+@app.post("/api/image-engine/warm")
+async def warm_image_engine():
+    """Pre-load the selected image model and prime GPU caches."""
+    try:
+        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
+        config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+        model_id = "schnell"
+        if config_path.exists():
+            model_id = config_path.read_text().strip() or "schnell"
+
+        engine = get_engine(model_id)
+
+        if not engine.is_ready or engine.current_model != model_id:
+            load_result = engine.load_model(model_id)
+            if load_result.get("status") == "error":
+                return load_result
+
+        warm_result = engine.warm()
+        return {**warm_result, "model": model_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/image-engine/status")
+async def image_engine_status():
+    """Get the current status of the image engine."""
+    try:
+        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
+        config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+        model_id = "schnell"
+        if config_path.exists():
+            model_id = config_path.read_text().strip() or "schnell"
+
+        reg = MODEL_REGISTRY.get(model_id, {})
+        engine_type = reg.get("engine", "mflux")
+        engine = get_engine(model_id)
+        return {**engine.status, "selected_model": model_id, "engine_type": engine_type}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 # ── Image performance settings ────────────────────────────────────────────────
@@ -637,6 +681,56 @@ async def warm_model():
         return {"status": "warm", "elapsed_s": elapsed}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+# ── Image Engine Endpoints ──────────────────────────────────────────────────
+
+@app.post("/api/image-engine/warm")
+async def warm_image_engine():
+    """Pre-load the image model into GPU memory and prime Metal kernel caches."""
+    try:
+        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
+        from pathlib import Path
+        import os
+
+        engine = get_engine()
+
+        # Read selected model from config
+        workspace = os.environ.get("BIRDSNEST_WORKSPACE", os.path.expanduser("~/birdsnest_workspace"))
+        config_path = Path(workspace) / ".birdsnest_image_model"
+        model_id = "z-image-turbo"
+        if config_path.exists():
+            model_id = config_path.read_text().strip() or "z-image-turbo"
+
+        if model_id not in MODEL_REGISTRY:
+            return {"status": "error", "error": f"Unknown model: {model_id}"}
+
+        # Load model if not already loaded
+        if not engine.is_ready or engine.current_model != model_id:
+            load_result = engine.load_model(model_id)
+            if load_result.get("status") == "error":
+                return {"status": "error", "error": load_result.get("message")}
+
+        # Warm Metal kernel caches with a tiny image
+        warm_result = engine.warm()
+        return {
+            "status": "warm",
+            "model": engine.current_model,
+            "engine": engine.status,
+            **warm_result,
+        }
+    except ImportError:
+        return {"status": "error", "error": "mflux not installed"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/image-engine/status")
+async def image_engine_status():
+    """Get the status of the persistent image engine."""
+    try:
+        from birdsnest.image_engine import get_engine
+        return get_engine().status
+    except ImportError:
+        return {"ready": False, "error": "mflux not installed"}
 
 @app.get("/api/status")
 async def get_status():

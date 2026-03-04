@@ -135,3 +135,7 @@ build/
 dist/
 *.spec.bak
 
+
+# Local models & data (large files)
+models/
+data/

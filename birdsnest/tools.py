@@ -1740,94 +1740,54 @@ def tool_generate_image(args: Dict) -> str:
     filename = f"{safe_name}_{timestamp}.png"
     filepath = IMAGES_DIR / filename
 
-    # Read active image model from config
-    model_config_path = WORKSPACE_DIR / ".birdsnest_image_model"
-    selected_model = "z-image-turbo"
-    if model_config_path.exists():
-        selected_model = model_config_path.read_text().strip() or "z-image-turbo"
-
-    # ── CLI mapping: each model family has its own mflux command ──
-    IMAGE_MODEL_CLI = {
-        # Z-Image (6B)
-        'z-image-turbo': {'cmd': 'mflux-generate-z-image-turbo', 'default_steps': 9},
-        # FLUX.2 Klein (4B/9B)
-        'flux2-klein-4b': {'cmd': 'mflux-generate-flux2', 'default_steps': 4, 'args': ['--model-version', '4b']},
-        'flux2-klein-9b': {'cmd': 'mflux-generate-flux2', 'default_steps': 8, 'args': ['--model-version', '9b']},
-        # FIBO (8B)
-        'fibo-lite':      {'cmd': 'mflux-generate-fibo', 'default_steps': 8, 'args': ['--model', 'fibo-lite']},
-        'fibo':           {'cmd': 'mflux-generate-fibo', 'default_steps': 30},
-        # SeedVR2 (3B) — upscaler, not generate
-        'seedvr2':        {'cmd': 'mflux-upscale-seedvr2', 'default_steps': 1, 'is_upscaler': True},
-        # Qwen Image (20B)
-        'qwen-image':     {'cmd': 'mflux-generate-qwen', 'default_steps': 30},
-        # Legacy FLUX.1 (12B)
-        'schnell':        {'cmd': 'mflux-generate', 'default_steps': 4, 'args': ['--model', 'schnell']},
-        'dev':            {'cmd': 'mflux-generate', 'default_steps': 20, 'args': ['--model', 'dev']},
-        'krea-dev':       {'cmd': 'mflux-generate', 'default_steps': 20, 'args': ['--model', 'krea-dev']},
-        'kontext':        {'cmd': 'mflux-generate-kontext', 'default_steps': 20},
-    }
-
-    model_info = IMAGE_MODEL_CLI.get(selected_model, IMAGE_MODEL_CLI['z-image-turbo'])
-    cli_cmd = model_info['cmd']
-    default_steps = model_info['default_steps']
-    extra_args = model_info.get('args', [])
-
-    steps = args.get("steps", default_steps)
-
-    # Resolve the full path to the mflux CLI command
-    resolved_cmd = _resolve_mflux_cmd(cli_cmd)
-
-    # Verify the command exists (fast shutil.which check, no subprocess)
-    import shutil as _shutil
-    if not _shutil.which(resolved_cmd):
-        return (
-            f"mflux command '{cli_cmd}' not found.\n"
-            f"Install with: pip install mflux\n"
-            f"Selected model: {selected_model}\n"
-            f"First run will download the model weights."
-        )
-
-    # Build the mflux command
-    cmd = [
-        resolved_cmd,
-        "--prompt", prompt,
-        "--output", str(filepath),
-        "--steps", str(steps),
-        "--width", str(width),
-        "--height", str(height),
-    ] + extra_args
-
-    # No quantization — run at full precision for best quality
-    # Speed/quality tradeoff handled by model selection (turbo vs base vs dev)
-
+    # ── Persistent Engine Path (fast — model stays in GPU memory) ──
     try:
-        t0 = time.time()
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        elapsed = time.time() - t0
+        from birdsnest.image_engine import get_engine, MODEL_REGISTRY
 
-        if filepath.exists():
+        # Read active image model from config
+        model_config_path = WORKSPACE_DIR / ".birdsnest_image_model"
+        selected_model = "schnell"
+        if model_config_path.exists():
+            selected_model = model_config_path.read_text().strip() or "schnell"
+
+        engine = get_engine(selected_model)
+
+        # Auto-load if engine has no model or a different model
+        if not engine.is_ready or engine.current_model != selected_model:
+            if selected_model not in MODEL_REGISTRY:
+                return f"Unknown image model: {selected_model}. Available: {', '.join(MODEL_REGISTRY.keys())}"
+            load_result = engine.load_model(selected_model)
+            if load_result.get("status") == "error":
+                return f"Failed to load image model: {load_result.get('message')}"
+
+        reg = MODEL_REGISTRY.get(selected_model, {})
+        steps = args.get("steps", reg.get("default_steps", 9))
+
+        result = engine.generate(
+            prompt=prompt,
+            output_path=str(filepath),
+            width=width,
+            height=height,
+            steps=steps,
+        )
+
+        if result["status"] == "ok":
             size_kb = filepath.stat().st_size / 1024
             serve_url = f"/workspace/images/{filename}"
             return (
-                f"Image generated in {elapsed:.1f}s\n"
-                f"Model: {selected_model}\n"
+                f"Image generated in {result['elapsed']:.1f}s\n"
+                f"Model: {result['model']} (Q4, persistent)\n"
                 f"Prompt: {prompt}\n"
                 f"Size: {width}x{height}, {size_kb:.1f} KB\n"
-                f"Steps: {steps}\n"
+                f"Steps: {result['steps']} | Seed: {result['seed']}\n"
                 f"File: {filepath}\n"
                 f"URL: {serve_url}"
             )
         else:
-            stderr = result.stderr[-500:] if result.stderr else "No error output"
-            return f"Image generation failed.\nModel: {selected_model}\nCommand: {' '.join(cmd[:3])}...\nError: {stderr}"
+            return f"Image generation failed: {result.get('message', 'Unknown error')}"
 
-    except subprocess.TimeoutExpired:
-        return "Image generation timed out (5 min limit)"
+    except ImportError:
+        return "Image generation requires mflux. Install with: pip install mflux"
     except Exception as e:
         return f"Image generation error: {str(e)}"
 
