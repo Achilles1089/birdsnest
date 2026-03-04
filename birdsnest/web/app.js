@@ -1005,13 +1005,10 @@ async function loadImageModels() {
         return html;
     }
 
-    // ── LOADED section ──
+    // ── LOADED section — only show if model is both selected AND installed ──
     const activeSection = document.getElementById('activeImageModel');
-    const active = catalog.find(m => m.id === activeImageModel);
+    const active = catalog.find(m => m.id === activeImageModel && m.installed);
     if (active) {
-        const notDownloadedNote = !active.installed
-            ? `<div class="model-card-desc" style="color:var(--yellow)">⚠ Will auto-download on first generation</div>`
-            : '';
 
         // Build resolution picker from model's supported resolutions
         const resolutions = active.resolutions || [];
@@ -1043,7 +1040,6 @@ async function loadImageModels() {
                     </div>
                 </div>
                 <div class="model-card-desc">${active.desc}</div>
-                ${notDownloadedNote}
                 ${resolutionHtml}
                 <div class="model-card-actions">
                     <button class="warm-btn" id="warmImageBtn" onclick="warmImageEngine()"
@@ -1416,13 +1412,10 @@ async function loadMusicModels() {
         return html;
     }
 
-    // ── LOADED section ──
+    // ── LOADED section — only show if model is both selected AND installed ──
     const activeSection = document.getElementById('activeMusicModel');
-    const active = catalog.find(m => m.id === activeId);
+    const active = catalog.find(m => m.id === activeId && m.installed);
     if (active) {
-        const notDownloadedNote = !active.installed
-            ? `<div class="model-card-desc" style="color:var(--yellow)">⚠ Will auto-download on first generation</div>`
-            : '';
         activeSection.className = '';
         activeSection.innerHTML = `
             <div class="model-card">
@@ -1434,7 +1427,6 @@ async function loadMusicModels() {
                     </div>
                 </div>
                 <div class="model-card-desc">${active.description || ''}</div>
-                ${notDownloadedNote}
                 <div class="model-card-actions">
                     <button class="btn btn-secondary" onclick="unloadMusicModel()">Unload</button>
                 </div>
