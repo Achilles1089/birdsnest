@@ -144,24 +144,19 @@ class ChatMessage(BaseModel):
 
 @app.get("/api/system-stats")
 async def system_stats():
-    """Return process RAM usage and total model disk usage."""
-    import resource
-    # macOS: ru_maxrss is in bytes, Linux: in kilobytes
-    import sys
-    rusage = resource.getrusage(resource.RUSAGE_SELF)
-    if sys.platform == "darwin":
-        ram_bytes = rusage.ru_maxrss  # bytes on macOS
-    else:
-        ram_bytes = rusage.ru_maxrss * 1024  # KB on Linux
+    """Return app RAM usage and total model disk usage."""
+    import psutil, os
 
-    ram_gb = round(ram_bytes / 1024**3, 2)
+    # Live app RAM (current RSS of this process)
+    proc = psutil.Process(os.getpid())
+    app_ram_mb = round(proc.memory_info().rss / (1024**2))
 
-    # Disk usage from all models
+    # Model disk usage
     disk = model_manager.disk_usage()
 
     return {
-        "ram_gb": ram_gb,
-        "disk_gb": disk.get("total_gb", 0),
+        "app_ram_mb": app_ram_mb,
+        "models_gb": disk.get("total_gb", 0),
         "model_count": disk.get("model_count", 0),
         "loaded": active_engine.model_name if active_engine and active_engine.is_loaded else None,
     }
@@ -204,7 +199,7 @@ def _delete_hf_model(dir_name: str):
 
 # Load active image model from config (persist across restarts)
 _img_config = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
-active_image_model = _img_config.read_text().strip() if _img_config.exists() else "schnell"
+active_image_model = _img_config.read_text().strip() if _img_config.exists() else "sdxl-lightning"
 
 from birdsnest.models import IMAGE_MODEL_CATALOG as _IMG_CATALOG
 
@@ -304,7 +299,7 @@ async def download_image_model(request: Request):
 async def select_image_model(request: Request):
     global active_image_model
     data = await request.json()
-    active_image_model = data.get("model", "schnell")
+    active_image_model = data.get("model", "sdxl-lightning")
     config_path = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(active_image_model)
@@ -744,9 +739,9 @@ async def warm_image_engine():
         # Read selected model from config
         workspace = os.environ.get("BIRDSNEST_WORKSPACE", os.path.expanduser("~/birdsnest_workspace"))
         config_path = Path(workspace) / ".birdsnest_image_model"
-        model_id = "sdxl-turbo"
+        model_id = "sdxl-lightning"
         if config_path.exists():
-            model_id = config_path.read_text().strip() or "sdxl-turbo"
+            model_id = config_path.read_text().strip() or "sdxl-lightning"
 
         # Determine engine type from catalog
         entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)

@@ -242,6 +242,7 @@ function connectWebSocket() {
                         'generate_music': '🎵 Generating music',
                         'translate': '🌐 Translating',
                         'youtube_transcript': '📺 Fetching transcript',
+                        'search_videos': '📺 Searching videos',
                         'search_web': '🔍 Searching',
                         'fetch_url': '🌍 Fetching URL',
                         'weather': '🌤️ Getting weather',
@@ -334,6 +335,15 @@ function connectWebSocket() {
                             setStatus('Generating...', 'yellow');
                             break;
                         }
+                        if (parsed.type === 'video_results' && parsed.videos) {
+                            const gridHtml = renderVideoGrid(parsed);
+                            resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📺</span> Video search: ${parsed.query}</div>${gridHtml}`;
+                            textEl.appendChild(resultEl);
+                            textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
+                            scrollToBottom();
+                            setStatus('Generating...', 'yellow');
+                            break;
+                        }
                     } catch (e) { /* Not JSON, continue with normal rendering */ }
 
                     // Linkify URLs in the result text
@@ -342,7 +352,12 @@ function connectWebSocket() {
                         '<a href="$1" target="_blank" rel="noopener" class="result-link">$1</a>'
                     );
 
-                    resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${linkified}</pre>${mediaHtml}`;
+                    // For search_web: collapsible pre with Show More
+                    if (data.name === 'search_web') {
+                        resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">🔍</span> ${data.name} result</div><pre class="tool-result-output search-web-output collapsed">${linkified}</pre><button class="show-more-btn" onclick="toggleWebResults(this)">Show more results</button>${mediaHtml}`;
+                    } else {
+                        resultEl.innerHTML = `<div class="tool-result-header"><span class="tool-result-icon">📋</span> ${data.name} result</div><pre class="tool-result-output">${linkified}</pre>${mediaHtml}`;
+                    }
                     textEl.appendChild(resultEl);
                     textEl.insertAdjacentHTML('beforeend', '<span class="typing-indicator"></span>');
                     scrollToBottom();
@@ -387,6 +402,8 @@ function addMessage(role, text, streaming = false) {
 
 // ── Image Search Grid ─────────────────────────────────────────
 function renderImageGrid(data) {
+    const initialCount = 4;
+    const hasMore = data.images.length > initialCount;
     const cards = data.images.map(img => {
         const thumb = img.thumbnail || img.image;
         const title = (img.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -399,12 +416,82 @@ function renderImageGrid(data) {
             </div>
         </a>`;
     }).join('');
-    return `<div class="image-search-grid">${cards}</div>
-            <div class="image-search-meta">${data.count} images found for "${data.query}"</div>`;
+    return `<div class="image-search-grid collapsed" data-initial="${initialCount}">${cards}</div>
+            <div class="image-search-meta">${data.count} images found for "${data.query}"</div>
+            ${hasMore ? `<button class="show-more-btn" onclick="toggleSearchResults(this)">Show ${data.images.length - initialCount} more images</button>` : ''}`;
+}
+
+// ── Video Search Grid ─────────────────────────────────────────
+function renderVideoGrid(data) {
+    const initialCount = 4;
+    const hasMore = data.videos.length > initialCount;
+    const cards = data.videos.map(vid => {
+        const title = (vid.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const channel = (vid.channel || '').replace(/</g, '&lt;');
+        const duration = (vid.duration || '').replace(/</g, '&lt;');
+        const views = (vid.views || '').replace(/</g, '&lt;');
+        const thumb = vid.thumbnail || `https://i.ytimg.com/vi/${vid.video_id}/hqdefault.jpg`;
+        return `<div class="video-search-card" data-video-id="${vid.video_id}" onclick="playVideoInline(this, '${vid.video_id}')">
+            <div class="video-search-thumb">
+                <img src="${thumb}" alt="${title}" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${vid.video_id}/hqdefault.jpg'">
+                ${duration ? `<span class="video-search-duration">${duration}</span>` : ''}
+                <div class="video-search-play">▶</div>
+            </div>
+            <div class="video-search-info">
+                <div class="video-search-title">${title}</div>
+                <div class="video-search-channel">${channel}</div>
+                ${views ? `<div class="video-search-views">${views}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+    return `<div class="video-search-grid collapsed" data-initial="${initialCount}">${cards}</div>
+            <div class="video-search-meta">${data.count} videos found for "${data.query}"</div>
+            ${hasMore ? `<button class="show-more-btn" onclick="toggleSearchResults(this)">Show ${data.videos.length - initialCount} more videos</button>` : ''}`;
+}
+
+function playVideoInline(card, videoId) {
+    // Replace the thumbnail with an embedded YouTube player
+    const thumbEl = card.querySelector('.video-search-thumb');
+    if (!thumbEl || card.classList.contains('playing')) return;
+    card.classList.add('playing');
+    thumbEl.innerHTML = `<iframe class="video-player-inline" src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+    card.onclick = null; // Disable further clicks
+    scrollToBottom();
+}
+
+function toggleWebResults(btn) {
+    const pre = btn.previousElementSibling;
+    if (!pre) return;
+    if (pre.classList.contains('collapsed')) {
+        pre.classList.remove('collapsed');
+        btn.textContent = 'Show less';
+    } else {
+        pre.classList.add('collapsed');
+        btn.textContent = 'Show more results';
+        pre.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function toggleSearchResults(btn) {
+    const grid = btn.parentElement.querySelector('.image-search-grid, .video-search-grid, .search-results-list');
+    if (!grid) return;
+    if (grid.classList.contains('collapsed')) {
+        grid.classList.remove('collapsed');
+        btn.textContent = 'Show less';
+    } else {
+        grid.classList.add('collapsed');
+        const initial = parseInt(grid.dataset.initial) || 4;
+        const total = grid.children.length;
+        const type = grid.classList.contains('video-search-grid') ? 'videos' : grid.classList.contains('image-search-grid') ? 'images' : 'results';
+        btn.textContent = `Show ${total - initial} more ${type}`;
+        grid.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 }
 
 // ── Web Search Result Cards ───────────────────────────────────
 function renderSearchCards(data) {
+    const initialCount = 3;
+    const hasMore = data.results.length > initialCount;
     const cards = data.results.map(r => {
         const title = (r.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -419,7 +506,8 @@ function renderSearchCards(data) {
             ${snippet ? `<div class="search-result-snippet">${snippet}</div>` : ''}
         </a>`;
     }).join('');
-    return `<div class="search-results-list">${cards}</div>`;
+    return `<div class="search-results-list collapsed" data-initial="${initialCount}">${cards}</div>
+            ${hasMore ? `<button class="show-more-btn" onclick="toggleSearchResults(this)">Show ${data.results.length - initialCount} more results</button>` : ''}`;
 }
 
 // ── Auto-Update Check ────────────────────────────────────────
@@ -1619,12 +1707,9 @@ async function fetchSystemStats() {
         const data = await res.json();
         const statsEl = document.getElementById('systemStats');
         statsEl.innerHTML = `
-            <span><span class="stat-label">RAM</span> <span class="stat-value">${data.ram_gb} GB</span></span>
-            <span class="stat-divider">│</span>
-            <span><span class="stat-label">Disk</span> <span class="stat-value">${data.disk_gb} GB</span></span>
-            <span class="stat-divider">│</span>
-            <span><span class="stat-label">Models</span> <span class="stat-value">${data.model_count}</span></span>
-            ${data.loaded ? `<span class="stat-divider">│</span><span><span class="stat-value" style="color:#8b9cf7">● ${data.loaded.split('-').pop()}</span></span>` : ''}
+            <span><span class="stat-label">RAM</span> <span class="stat-value">${data.app_ram_mb} MB</span></span>
+            <span><span class="stat-label">Models</span> <span class="stat-value">${data.models_gb} GB (${data.model_count})</span></span>
+            ${data.loaded ? `<span><span class="stat-value" style="color:#8b9cf7">● ${data.loaded.split('-').pop()}</span></span>` : ''}
         `;
     } catch { }
 }

@@ -7,7 +7,7 @@
     <title>Bird's Nest — Local AI Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 
 <body>
@@ -203,16 +203,6 @@
         <!-- Image Models Tab -->
         <div class="tab-content" id="tabImage">
             <div class="panel-section">
-                <h3>Loaded</h3>
-                <div id="activeImageModel" class="empty-state">No image model loaded</div>
-            </div>
-            <div class="panel-section">
-                <h3>Downloaded</h3>
-                <div id="imageInstalledList" class="model-list"></div>
-            </div>
-
-
-            <div class="panel-section">
                 <h3>🎨 Style Preset</h3>
                 <div class="style-preset-chips" id="stylePresetChips">
                     <button class="style-chip active" data-style="none"
@@ -238,6 +228,14 @@
                         oninput="document.getElementById('styleIntensityLabel').textContent = ['Subtle','Normal','Strong'][this.value-1]; saveStyleSettings()">
                     <span id="styleIntensityLabel">Normal</span>
                 </div>
+            </div>
+            <div class="panel-section">
+                <h3>Loaded</h3>
+                <div id="activeImageModel" class="empty-state">No image model loaded</div>
+            </div>
+            <div class="panel-section">
+                <h3>Downloaded</h3>
+                <div id="imageInstalledList" class="model-list"></div>
             </div>
             <div class="panel-section">
                 <h3>Available to Download</h3>
@@ -453,7 +451,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=8"></script>
+    <script src="/static/app.js?v=22"></script>
 </body>
 
 </html>

@@ -306,6 +306,8 @@ def build_tool_system_prompt() -> str:
         capabilities.append("search your files and folders by name or content")
     if 'search_images' in enabled:
         capabilities.append("search for images online")
+    if 'search_videos' in enabled:
+        capabilities.append("search YouTube for videos and play them inline")
     if 'search_web' in enabled:
         capabilities.append("search the web for information")
     if 'generate_music' in enabled:
@@ -374,6 +376,20 @@ def detect_user_intent(message: str) -> Optional[Tuple[str, Dict]]:
             expr = expr.strip()
             if expr:
                 return ('calculate', {'expression': expr})
+
+    # ── Video Search queries (MUST be before Image Search — more specific match) ──
+    vid_search_patterns = [
+        (r'(?:show|find|search|get|look up) (?:me )?(?:videos?|clips?) (?:of |about |for |showing |on )?(.+)', 1),
+        (r'(?:search|find|look) for videos? (?:of |about |on )?(.+)', 1),
+        (r'(?:video|youtube) search (?:for )?(.+)', 1),
+        (r'(?:find|search) (?:a |some )?(?:youtube |yt )?(?:videos?|clips?) (?:of |about |on |for )?(.+)', 1),
+    ]
+    for pattern, group in vid_search_patterns:
+        m = re.search(pattern, msg)
+        if m and 'search_videos' in _tools and _tools['search_videos'].enabled:
+            query = m.group(group).strip().rstrip('.')
+            if query and len(query) > 2:
+                return ('search_videos', {'query': query})
 
     # ── Image Search queries ──
     img_search_patterns = [
@@ -747,7 +763,7 @@ def tool_search_web(args: Dict) -> str:
             if r["url"] not in seen:
                 seen.add(r["url"])
                 unique.append(r)
-            if len(unique) >= 5:
+            if len(unique) >= 10:
                 break
 
         output = f"Search results for: {query}\n\n"
@@ -828,9 +844,9 @@ def tool_search_images(args: Dict) -> str:
         if not results:
             return f"No images found for: {query}"
 
-        # Take top 8 images
+        # Take top 16 images
         images = []
-        for r in results[:8]:
+        for r in results[:16]:
             images.append({
                 "title": r.get("title", "")[:80],
                 "image": r.get("image", ""),        # Full-size URL
@@ -851,6 +867,105 @@ def tool_search_images(args: Dict) -> str:
 
     except Exception as e:
         return f"Image search error: {str(e)}"
+
+
+@register_tool(
+    "search_videos",
+    "Search YouTube for videos",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Video search query"}
+        },
+        "required": ["query"],
+    },
+)
+def tool_search_videos(args: Dict) -> str:
+    query = args.get("query") or args.get("input", "")
+    if not query:
+        return "Error: No search query provided"
+
+    import urllib.request
+    import urllib.parse
+    import json as _json
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            page = resp.read().decode("utf-8", errors="replace")
+
+        # YouTube embeds search results as JSON inside ytInitialData
+        match = re.search(r'var ytInitialData = (\{.+?\});\s*</script>', page)
+        if not match:
+            match = re.search(r'ytInitialData\s*=\s*(\{.+?\});\s*</script>', page)
+        if not match:
+            return f"Could not parse YouTube search results for: {query}"
+
+        data = _json.loads(match.group(1))
+
+        # Navigate the YouTube data structure to find video renderers
+        videos = []
+        try:
+            contents = data["contents"]["twoColumnSearchResultsRenderer"]["primaryContents"]["sectionListRenderer"]["contents"]
+            for section in contents:
+                items = section.get("itemSectionRenderer", {}).get("contents", [])
+                for item in items:
+                    vr = item.get("videoRenderer")
+                    if not vr:
+                        continue
+                    video_id = vr.get("videoId", "")
+                    if not video_id:
+                        continue
+
+                    title_runs = vr.get("title", {}).get("runs", [])
+                    title = title_runs[0].get("text", "") if title_runs else ""
+
+                    channel_runs = vr.get("ownerText", {}).get("runs", [])
+                    channel = channel_runs[0].get("text", "") if channel_runs else ""
+
+                    duration_text = vr.get("lengthText", {}).get("simpleText", "")
+
+                    # Thumbnail — pick highest quality
+                    thumbs = vr.get("thumbnail", {}).get("thumbnails", [])
+                    thumbnail = thumbs[-1].get("url", "") if thumbs else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+                    # View count
+                    view_text = vr.get("viewCountText", {}).get("simpleText", "")
+
+                    videos.append({
+                        "video_id": video_id,
+                        "title": title[:100],
+                        "channel": channel[:50],
+                        "duration": duration_text,
+                        "thumbnail": thumbnail,
+                        "views": view_text,
+                        "url": f"https://www.youtube.com/watch?v={video_id}",
+                    })
+
+                    if len(videos) >= 12:
+                        break
+                if len(videos) >= 12:
+                    break
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        if not videos:
+            return f"No videos found for: {query}"
+
+        return _json.dumps({
+            "type": "video_results",
+            "query": query,
+            "count": len(videos),
+            "videos": videos,
+        })
+
+    except Exception as e:
+        return f"Video search error: {str(e)}"
 
 
 @register_tool(

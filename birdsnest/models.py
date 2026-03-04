@@ -322,227 +322,14 @@ MODEL_CATALOG = [
 
 IMAGE_MODEL_CATALOG = [
     # ═══════════════════════════════════════════════════════════════════════════
-    #  Z-Image — Tongyi Lab (Alibaba), 6B params, Nov 2025
+    #  CORE TIERS — Good / Better / Best / Unleashed / Pro
     # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "z-image-turbo",
-        "name": "Z-Image Turbo",
-        "display_name": "Z-Image Turbo ★",
-        "cli_command": "mflux-generate-z-image-turbo",
-        "hf_repo": "Tongyi-MAI/Z-Image-Turbo",
-        "default_steps": 9,
-        "size_gb": 12.0,
-        "quantized_size_gb": 4.0,
-        "params": "6B",
-        "capabilities": ["generate", "img2img", "lora"],
-        "description": "Fastest high-quality — 9 steps, distilled 6B, bilingual text rendering",
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
-        "default_resolution": [1024, 1024],
-    },
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  FLUX.2 — Black Forest Labs, 4B & 9B params, Jan 2026
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "flux2-klein-4b",
-        "name": "FLUX.2 Klein 4B",
-        "display_name": "FLUX.2 Klein 4B ★",
-        "cli_command": "mflux-generate-flux2",
-        "model_version": "4b",
-        "hf_repo": "black-forest-labs/FLUX.2-klein-4B",
-        "default_steps": 4,
-        "size_gb": 8.0,
-        "quantized_size_gb": 3.0,
-        "params": "4B",
-        "capabilities": ["generate", "edit", "img2img", "lora"],
-        "description": "Smallest & fastest FLUX.2 — 4 steps, image editing support",
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-    {
-        "id": "flux2-klein-9b",
-        "name": "FLUX.2 Klein 9B",
-        "display_name": "FLUX.2 Klein 9B",
-        "cli_command": "mflux-generate-flux2",
-        "model_version": "9b",
-        "hf_repo": "black-forest-labs/FLUX.2-klein-9B",
-        "default_steps": 8,
-        "size_gb": 18.0,
-        "quantized_size_gb": 7.0,
-        "params": "9B",
-        "capabilities": ["generate", "edit", "img2img", "lora"],
-        "description": "Larger FLUX.2 — better quality, image editing, 9B params",
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  FIBO — Bria.ai, 8B params, Oct 2025
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "fibo-lite",
-        "name": "FIBO Lite",
-        "display_name": "FIBO Lite",
-        "cli_command": "mflux-generate-fibo",
-        "model_version": "lite",
-        "hf_repo": "briaai/FIBO-lite",
-        "default_steps": 8,
-        "size_gb": 10.0,
-        "quantized_size_gb": 4.0,
-        "params": "8B",
-        "capabilities": ["generate"],
-        "description": "Distilled FIBO — 8 steps, JSON-native prompting, ~10x faster",
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
-        "default_resolution": [1024, 1024],
-    },
-    {
-        "id": "fibo",
-        "name": "FIBO",
-        "display_name": "FIBO (Base)",
-        "cli_command": "mflux-generate-fibo",
-        "model_version": "fibo",
-        "hf_repo": "briaai/FIBO",
-        "default_steps": 30,
-        "size_gb": 16.0,
-        "quantized_size_gb": 6.0,
-        "params": "8B",
-        "capabilities": ["generate", "refine", "inspire"],
-        "description": "Full FIBO — JSON-native precision, VLM refine/inspire modes, 30 steps",
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
-        "default_resolution": [1024, 1024],
-    },
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  SeedVR2 — ByteDance, 3B params, Jun 2025
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "seedvr2",
-        "name": "SeedVR2 Upscaler",
-        "display_name": "SeedVR2 Upscaler",
-        "cli_command": "mflux-upscale-seedvr2",
-        "hf_repo": "numz/SeedVR2_3b",
-        "default_steps": 1,
-        "size_gb": 6.0,
-        "quantized_size_gb": 2.5,
-        "params": "3B",
-        "capabilities": ["upscale"],
-        "description": "1-step upscale — no prompt, fast, high-fidelity super-resolution",
-        "resolutions": [],
-        "default_resolution": None,
-    },
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  Qwen Image — Alibaba, 20B params, Aug 2025
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "qwen-image",
-        "name": "Qwen Image",
-        "display_name": "Qwen Image 20B",
-        "cli_command": "mflux-generate-qwen",
-        "hf_repo": "Qwen/Qwen-Image",
-        "default_steps": 30,
-        "size_gb": 40.0,
-        "quantized_size_gb": 15.0,
-        "params": "20B",
-        "capabilities": ["generate", "edit"],
-        "description": "Largest model — 20B, best prompt understanding & world knowledge, slower",
-        "resolutions": [[512,512], [768,768], [1024,1024], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  FLUX.1 — Black Forest Labs, 12B params, Aug 2024 (Legacy)
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "schnell",
-        "name": "FLUX.1 Schnell",
-        "display_name": "FLUX.1 Schnell",
-        "cli_command": "mflux-generate",
-        "cli_args": ["--model", "schnell"],
-        "hf_repo": "black-forest-labs/FLUX.1-schnell",
-        "default_steps": 4,
-        "size_gb": 24.0,
-        "quantized_size_gb": 8.0,
-        "params": "12B",
-        "capabilities": ["generate", "lora"],
-        "description": "Fast FLUX.1 — 4 steps, distilled, good general quality",
-        "legacy": True,
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-    {
-        "id": "dev",
-        "name": "FLUX.1 Dev",
-        "display_name": "FLUX.1 Dev",
-        "cli_command": "mflux-generate",
-        "cli_args": ["--model", "dev"],
-        "hf_repo": "black-forest-labs/FLUX.1-dev",
-        "default_steps": 20,
-        "size_gb": 24.0,
-        "quantized_size_gb": 8.0,
-        "params": "12B",
-        "capabilities": ["generate", "lora", "controlnet", "depth"],
-        "description": "Best FLUX.1 — 20 steps, full quality, controlnet/depth support",
-        "legacy": True,
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-    {
-        "id": "krea-dev",
-        "name": "FLUX.1 Krea Dev",
-        "display_name": "FLUX.1 Krea Dev",
-        "cli_command": "mflux-generate",
-        "cli_args": ["--model", "krea-dev"],
-        "hf_repo": "black-forest-labs/FLUX.1-Krea-dev",
-        "default_steps": 20,
-        "size_gb": 24.0,
-        "quantized_size_gb": 8.0,
-        "params": "12B",
-        "capabilities": ["generate", "lora"],
-        "description": "Enhanced photorealism — Krea AI fine-tuned FLUX.1 Dev",
-        "legacy": True,
-        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
-        "default_resolution": [1024, 1024],
-    },
-    {
-        "id": "kontext",
-        "name": "FLUX.1 Kontext",
-        "display_name": "FLUX.1 Kontext",
-        "cli_command": "mflux-generate-kontext",
-        "hf_repo": "black-forest-labs/FLUX.1-Kontext-dev",
-        "default_steps": 20,
-        "size_gb": 24.0,
-        "quantized_size_gb": 8.0,
-        "params": "12B",
-        "capabilities": ["generate", "edit", "style-transfer"],
-        "description": "Image editing via text — style transfer, character consistency, in-context gen",
-        "legacy": True,
-        "resolutions": [[512,512], [768,768], [1024,1024]],
-        "default_resolution": [1024, 1024],
-    },
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    #  SDXL — Stability AI / ByteDance, 3.5B params, Distilled for Speed
-    # ═══════════════════════════════════════════════════════════════════════════
-    {
-        "id": "sdxl-turbo",
-        "name": "SDXL Turbo",
-        "display_name": "SDXL Turbo ⚡",
-        "engine": "diffusers",
-        "hf_repo": "stabilityai/sdxl-turbo",
-        "default_steps": 1,
-        "size_gb": 6.5,
-        "quantized_size_gb": 6.5,
-        "params": "3.5B",
-        "capabilities": ["generate"],
-        "description": "Fastest — 1 step, 512² only, adversarial distillation, real-time generation",
-        "resolutions": [[512,512]],
-        "default_resolution": [512, 512],
-    },
+    # ── ⚡ Good — Instant results, small download ─────────────────────────────
     {
         "id": "sdxl-lightning",
         "name": "SDXL Lightning",
-        "display_name": "SDXL Lightning ⚡⚡",
+        "display_name": "SDXL Lightning ⚡ Good",
         "engine": "diffusers",
         "hf_repo": "stabilityai/stable-diffusion-xl-base-1.0",
         "lora_repo": "ByteDance/SDXL-Lightning",
@@ -551,9 +338,135 @@ IMAGE_MODEL_CATALOG = [
         "quantized_size_gb": 6.5,
         "params": "3.5B + LoRA",
         "capabilities": ["generate"],
-        "description": "Ultra-fast 1024² — 4 steps, ByteDance Lightning LoRA, best speed/quality ratio",
+        "description": "⚡ Good — 4 steps, 1024², fast & reliable, no quantization needed",
         "resolutions": [[512,512], [768,768], [1024,1024]],
         "default_resolution": [1024, 1024],
+    },
+
+    # ── ★ Better — Sweet spot for speed & quality ────────────────────────────
+    {
+        "id": "flux2-klein-4b",
+        "name": "FLUX.2 Klein 4B",
+        "display_name": "FLUX.2 Klein 4B ★ Better",
+        "cli_command": "mflux-generate-flux2",
+        "model_version": "4b",
+        "hf_repo": "black-forest-labs/FLUX.2-klein-4B",
+        "default_steps": 4,
+        "size_gb": 8.0,
+        "quantized_size_gb": 3.0,
+        "params": "4B",
+        "capabilities": ["generate", "edit", "img2img", "lora"],
+        "description": "★ Better — 3 GB quantized, 4 steps, editing support, best value",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ── 👑 Best — Top quality at reasonable speed ────────────────────────────
+    {
+        "id": "flux2-klein-9b",
+        "name": "FLUX.2 Klein 9B",
+        "display_name": "FLUX.2 Klein 9B 👑 Best",
+        "cli_command": "mflux-generate-flux2",
+        "model_version": "9b",
+        "hf_repo": "black-forest-labs/FLUX.2-klein-9B",
+        "default_steps": 8,
+        "size_gb": 18.0,
+        "quantized_size_gb": 7.0,
+        "params": "9B",
+        "capabilities": ["generate", "edit", "img2img", "lora"],
+        "description": "👑 Best — 9B detail, editing, multi-reference consistency",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ── 🎨 Unleashed — Maximum steps, maximum quality ────────────────────────
+    {
+        "id": "dev",
+        "name": "FLUX.1 Dev",
+        "display_name": "FLUX.1 Dev 🎨 Unleashed",
+        "cli_command": "mflux-generate",
+        "cli_args": ["--model", "dev"],
+        "hf_repo": "black-forest-labs/FLUX.1-dev",
+        "default_steps": 20,
+        "size_gb": 24.0,
+        "quantized_size_gb": 8.0,
+        "params": "12B",
+        "capabilities": ["generate", "lora", "controlnet", "depth"],
+        "description": "🎨 Unleashed — 20+ steps, LoRA/ControlNet/depth, proven quality king",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768], [1024,1536]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ── 🏆 Pro — No compromises, needs 32GB+ RAM ────────────────────────────
+    {
+        "id": "qwen-image",
+        "name": "Qwen Image",
+        "display_name": "Qwen Image 20B 🏆 Pro",
+        "cli_command": "mflux-generate-qwen",
+        "hf_repo": "Qwen/Qwen-Image",
+        "default_steps": 30,
+        "size_gb": 40.0,
+        "quantized_size_gb": 15.0,
+        "params": "20B",
+        "capabilities": ["generate", "edit"],
+        "description": "🏆 Pro — 20B, best prompt understanding, world knowledge, 32GB+ RAM",
+        "resolutions": [[512,512], [768,768], [1024,1024], [1024,1536]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  SPECIALTY MODELS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    # ── Realism specialist ───────────────────────────────────────────────────
+    {
+        "id": "z-image-turbo",
+        "name": "Z-Image Turbo",
+        "display_name": "Z-Image Turbo 📸",
+        "cli_command": "mflux-generate-z-image-turbo",
+        "hf_repo": "Tongyi-MAI/Z-Image-Turbo",
+        "default_steps": 9,
+        "size_gb": 12.0,
+        "quantized_size_gb": 4.0,
+        "params": "6B",
+        "capabilities": ["generate", "img2img", "lora"],
+        "description": "📸 Realism — photorealistic specialist, bilingual text rendering",
+        "resolutions": [[512,512], [768,768], [1024,1024], [768,1024], [1024,768]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ── Editing & style transfer ─────────────────────────────────────────────
+    {
+        "id": "kontext",
+        "name": "FLUX.1 Kontext",
+        "display_name": "FLUX.1 Kontext ✂️",
+        "cli_command": "mflux-generate-kontext",
+        "hf_repo": "black-forest-labs/FLUX.1-Kontext-dev",
+        "default_steps": 20,
+        "size_gb": 24.0,
+        "quantized_size_gb": 8.0,
+        "params": "12B",
+        "capabilities": ["generate", "edit", "style-transfer"],
+        "description": "✂️ Editor — style transfer, character consistency, in-context generation",
+        "resolutions": [[512,512], [768,768], [1024,1024]],
+        "default_resolution": [1024, 1024],
+    },
+
+    # ── Upscaler ─────────────────────────────────────────────────────────────
+    {
+        "id": "seedvr2",
+        "name": "SeedVR2 Upscaler",
+        "display_name": "SeedVR2 Upscaler ⬆️",
+        "cli_command": "mflux-upscale-seedvr2",
+        "hf_repo": "numz/SeedVR2_3b",
+        "default_steps": 1,
+        "size_gb": 6.0,
+        "quantized_size_gb": 2.5,
+        "params": "3B",
+        "capabilities": ["upscale"],
+        "description": "⬆️ Upscaler — 1-step super-resolution, no prompt needed",
+        "resolutions": [],
+        "default_resolution": None,
     },
 ]
 
