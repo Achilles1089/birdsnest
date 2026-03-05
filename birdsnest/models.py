@@ -369,7 +369,7 @@ IMAGE_MODEL_CATALOG = [
         "cli_command": "mflux-generate-flux2",
         "model_version": "9b",
         "hf_repo": "black-forest-labs/FLUX.2-klein-9B",
-        "default_steps": 8,
+        "default_steps": 20,
         "size_gb": 18.0,
         "quantized_size_gb": 7.0,
         "params": "9B",

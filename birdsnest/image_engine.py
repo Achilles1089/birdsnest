@@ -35,7 +35,7 @@ MODEL_REGISTRY = {
         "engine": "mflux",
         "class_path": "mflux.models.flux2.Flux2Klein",
         "config": "flux2_klein_9b",
-        "default_steps": 8,
+        "default_steps": 20,
     },
     # FIBO
     "fibo-lite": {
@@ -541,7 +541,7 @@ def get_engine(model_id: Optional[str] = None) -> 'ImageEngine | DiffusersEngine
             _diffusers_engine.unload()
 
         if _mflux_engine is None:
-            _mflux_engine = ImageEngine(quantize=4)
+            _mflux_engine = ImageEngine(quantize=8)
         return _mflux_engine
 
 

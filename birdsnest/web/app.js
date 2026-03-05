@@ -232,7 +232,7 @@ function connectWebSocket() {
                     toolCallEl.innerHTML = `<span class="tool-call-icon">🔧</span> <span class="tool-call-name">${data.name}</span>${argsStr ? `<span class="tool-call-args">(${argsStr})</span>` : ''}`;
                     textEl.appendChild(toolCallEl);
 
-                    // Live timer for slow tools
+                    // Live progress bar for image tools, timer for other slow tools
                     const slowToolMessages = {
                         'generate_image': '🎨 Generating image',
                         'upscale_image': '🔍 Upscaling image',
@@ -247,8 +247,44 @@ function connectWebSocket() {
                         'fetch_url': '🌍 Fetching URL',
                         'weather': '🌤️ Getting weather',
                     };
+                    const isImageTool = ['generate_image', 'edit_image', 'upscale_image'].includes(data.name);
+                    const totalSteps = data.total_steps;
+                    const modelName = data.model_name;
                     const slowMsg = slowToolMessages[data.name];
-                    if (slowMsg) {
+
+                    if (isImageTool && totalSteps) {
+                        // Step progress bar for image tools
+                        const progressEl = document.createElement('div');
+                        progressEl.className = 'image-step-progress';
+                        progressEl.id = 'toolProgressTimer';
+                        progressEl.innerHTML = `
+                            <div class="step-progress-header">
+                                <span class="step-progress-label">🎨 ${modelName || 'Image Model'}</span>
+                                <span class="step-progress-time">0s</span>
+                            </div>
+                            <div class="step-progress-bar-track">
+                                <div class="step-progress-bar-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="step-progress-detail">Step 0 / ${totalSteps}</div>
+                        `;
+                        textEl.appendChild(progressEl);
+
+                        // Animate progress based on estimated time per step
+                        let secs = 0;
+                        const estSecsPerStep = totalSteps <= 4 ? 3 : totalSteps <= 10 ? 2.5 : 2;
+                        const estTotal = totalSteps * estSecsPerStep;
+                        window._toolTimer = setInterval(() => {
+                            secs++;
+                            const el = document.getElementById('toolProgressTimer');
+                            if (!el) { clearInterval(window._toolTimer); return; }
+                            // Estimated current step (capped at totalSteps)
+                            const estStep = Math.min(totalSteps, Math.floor(secs / estSecsPerStep) + 1);
+                            const pct = Math.min(95, (secs / estTotal) * 100); // cap at 95% until done
+                            el.querySelector('.step-progress-time').textContent = `${secs}s`;
+                            el.querySelector('.step-progress-bar-fill').style.width = `${pct}%`;
+                            el.querySelector('.step-progress-detail').textContent = `Step ${estStep} / ${totalSteps}`;
+                        }, 1000);
+                    } else if (slowMsg) {
                         const timerEl = document.createElement('div');
                         timerEl.className = 'tool-progress';
                         timerEl.id = 'toolProgressTimer';
@@ -272,7 +308,14 @@ function connectWebSocket() {
                 // Clear any running timer
                 if (window._toolTimer) { clearInterval(window._toolTimer); window._toolTimer = null; }
                 const progressEl = document.getElementById('toolProgressTimer');
-                if (progressEl) progressEl.remove();
+                if (progressEl) {
+                    // Snap to 100% for a moment before removing
+                    const fill = progressEl.querySelector('.step-progress-bar-fill');
+                    const detail = progressEl.querySelector('.step-progress-detail');
+                    if (fill) fill.style.width = '100%';
+                    if (detail) detail.textContent = '✅ Complete!';
+                    setTimeout(() => progressEl.remove(), 600);
+                }
 
                 if (currentStreamEl) {
                     const textEl = currentStreamEl.querySelector('.message-text');
@@ -1161,7 +1204,23 @@ async function loadImageModels() {
 
 async function downloadImageModel(modelId, btn) {
     btn.disabled = true;
-    btn.textContent = 'Downloading...';
+    btn.textContent = '⏳ Starting...';
+
+    // Start polling for progress
+    const pollInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/api/image-models/download-status');
+            const data = await res.json();
+            const info = data[modelId];
+            if (info && info.status === 'downloading') {
+                const pct = info.pct || 0;
+                const files = info.downloaded || 0;
+                const total = info.total || '?';
+                const mb = info.bytes ? (info.bytes / 1048576).toFixed(0) : '0';
+                btn.textContent = `📥 ${pct}% (${files}/${total} files, ${mb} MB)`;
+            }
+        } catch (_) { }
+    }, 2000);
 
     try {
         const res = await fetch('/api/image-models/download', {
@@ -1171,16 +1230,38 @@ async function downloadImageModel(modelId, btn) {
         });
         const data = await res.json();
 
-        if (res.ok) {
-            addSystemMessage(`Downloaded ${modelId} (${data.size_gb} GB in ${data.time}s)`);
+        clearInterval(pollInterval);
+
+        if (data.status === 'already_downloading') {
+            btn.textContent = '⏳ Already downloading...';
+            // Keep polling until done
+            const waitPoll = setInterval(async () => {
+                try {
+                    const r = await fetch('/api/image-models/download-status');
+                    const d = await r.json();
+                    const info = d[modelId];
+                    if (!info || info.status !== 'downloading') {
+                        clearInterval(waitPoll);
+                        loadImageModels();
+                    } else {
+                        btn.textContent = `📥 ${info.pct || 0}%`;
+                    }
+                } catch (_) { clearInterval(waitPoll); }
+            }, 2000);
+            return;
+        }
+
+        if (res.ok && data.status === 'downloaded') {
+            addSystemMessage(`✅ Downloaded ${modelId} (${data.size_gb} GB in ${data.time}s)`);
             loadImageModels();
         } else {
-            throw new Error(data.detail || 'Download failed');
+            throw new Error(data.message || data.detail || 'Download failed');
         }
     } catch (e) {
+        clearInterval(pollInterval);
         addSystemMessage(`Image model download failed: ${e.message}`, 'error');
         btn.disabled = false;
-        btn.textContent = 'Retry';
+        btn.textContent = '🔄 Retry';
     }
 }
 

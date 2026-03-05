@@ -210,7 +210,7 @@ async def list_image_models():
     # Scan HF cache for all downloaded models
     installed_repos = set()
     installed_raw = []
-    for prefix in ["black-forest-labs", "FLUX", "mflux", "Tongyi", "briaai", "ByteDance", "stabilityai"]:
+    for prefix in ["black-forest-labs", "FLUX", "mflux", "Tongyi", "briaai", "ByteDance", "stabilityai", "Qwen"]:
         for m in _scan_hf_cache(prefix):
             if m["dir_name"] not in {x["dir_name"] for x in installed_raw}:
                 installed_raw.append(m)
@@ -246,12 +246,56 @@ async def list_image_models():
     return {"catalog": catalog, "installed_raw": installed_raw, "active": active_image_model}
 
 
+# ── Download tracking ────────────────────────────────────────────────────────
+_active_downloads: dict = {}  # model_id -> {"status": ..., "progress": ..., "error": ...}
+
+def _get_download_progress(hf_repo: str) -> dict:
+    """Check HuggingFace cache for download progress of a repo."""
+    import re
+    cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+    repo_dir = cache_dir / f"models--{hf_repo.replace('/', '--')}"
+
+    if not repo_dir.exists():
+        return {"downloaded": 0, "total": 0, "pct": 0}
+
+    blobs_dir = repo_dir / "blobs"
+    if not blobs_dir.exists():
+        return {"downloaded": 0, "total": 0, "pct": 0}
+
+    complete = sum(1 for f in blobs_dir.iterdir() if not f.name.endswith('.incomplete'))
+    incomplete = sum(1 for f in blobs_dir.iterdir() if f.name.endswith('.incomplete'))
+    total = complete + incomplete
+    pct = int((complete / total * 100)) if total > 0 else 0
+
+    # Also get bytes
+    total_bytes = sum(f.stat().st_size for f in blobs_dir.iterdir() if not f.name.endswith('.incomplete'))
+
+    return {"downloaded": complete, "incomplete": incomplete, "total": total, "pct": pct, "bytes": total_bytes}
+
+
+@app.get("/api/image-models/download-status")
+async def image_download_status():
+    """Get current download status for all active downloads."""
+    result = {}
+    for model_id, info in _active_downloads.items():
+        entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
+        progress = {}
+        if entry and entry.get("hf_repo"):
+            progress = _get_download_progress(entry["hf_repo"])
+        result[model_id] = {**info, **progress}
+    return result
+
+
 @app.post("/api/image-models/download")
 async def download_image_model(request: Request):
     """Pre-download an image model from HuggingFace."""
     try:
         data = await request.json()
         model_id = data.get("model_id", "")
+
+        # Guard: prevent duplicate downloads
+        if model_id in _active_downloads and _active_downloads[model_id]["status"] == "downloading":
+            return {"status": "already_downloading", "model_id": model_id}
 
         entry = next((e for e in _IMG_CATALOG if e["id"] == model_id), None)
         if not entry:
@@ -266,24 +310,37 @@ async def download_image_model(request: Request):
         except ImportError:
             return {"status": "error", "message": "huggingface_hub not installed. Run: pip install huggingface_hub"}
 
+        _active_downloads[model_id] = {"status": "downloading", "progress": 0, "error": None}
+
         loop = asyncio.get_running_loop()
 
         def _download():
-            snapshot_download(
-                repo_id=hf_repo,
-                local_dir_use_symlinks=True,
-            )
-            # Also download LoRA weights if model requires them
-            lora_repo = entry.get("lora_repo")
-            if lora_repo:
+            try:
                 snapshot_download(
-                    repo_id=lora_repo,
+                    repo_id=hf_repo,
                     local_dir_use_symlinks=True,
                 )
+                # Also download LoRA weights if model requires them
+                lora_repo = entry.get("lora_repo")
+                if lora_repo:
+                    snapshot_download(
+                        repo_id=lora_repo,
+                        local_dir_use_symlinks=True,
+                    )
+                _active_downloads[model_id] = {"status": "done", "progress": 100, "error": None}
+            except Exception as e:
+                _active_downloads[model_id] = {"status": "error", "progress": 0, "error": str(e)}
 
         t0 = time.time()
         await loop.run_in_executor(None, _download)
         elapsed = time.time() - t0
+
+        dl_info = _active_downloads.get(model_id, {})
+        if dl_info.get("status") == "error":
+            return {"status": "error", "message": dl_info.get("error", "Unknown error")}
+
+        # Clean up tracking
+        _active_downloads.pop(model_id, None)
 
         return {
             "status": "downloaded",
@@ -292,6 +349,7 @@ async def download_image_model(request: Request):
             "time": round(elapsed, 1),
         }
     except Exception as e:
+        _active_downloads.pop(model_id, None)
         return {"status": "error", "message": f"Download failed: {str(e)}"}
 
 
@@ -1036,11 +1094,26 @@ async def websocket_chat(websocket: WebSocket):
 
                     t0 = time.time()
 
-                    # Execute tool directly
+                    # Execute tool directly — enrich with image model metadata for progress
+                    tool_meta = {}
+                    if tool_name in ('generate_image', 'edit_image', 'upscale_image'):
+                        try:
+                            _cfg = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+                            _mid = _cfg.read_text().strip() if _cfg.exists() else "sdxl-lightning"
+                            _entry = next((e for e in _IMG_CATALOG if e["id"] == _mid), None)
+                            if _entry:
+                                tool_meta = {
+                                    "total_steps": tool_args.get("steps", _entry.get("default_steps", 4)),
+                                    "model_name": _entry.get("display_name", _mid),
+                                }
+                        except Exception:
+                            pass
+
                     await websocket.send_json({
                         "type": "tool_call",
                         "name": tool_name,
                         "args": tool_args,
+                        **tool_meta,
                     })
 
                     # Run in thread pool so WebSocket messages flush before blocking
@@ -1171,10 +1244,24 @@ async def websocket_chat(websocket: WebSocket):
 
                             # Parse and execute tool
                             func_name, args = parse_tool_call(fmt, match)
+                            tool_meta = {}
+                            if func_name in ('generate_image', 'edit_image', 'upscale_image'):
+                                try:
+                                    _cfg = Path.home() / "birdsnest_workspace" / ".birdsnest_image_model"
+                                    _mid = _cfg.read_text().strip() if _cfg.exists() else "sdxl-lightning"
+                                    _entry = next((e for e in _IMG_CATALOG if e["id"] == _mid), None)
+                                    if _entry:
+                                        tool_meta = {
+                                            "total_steps": args.get("steps", _entry.get("default_steps", 4)),
+                                            "model_name": _entry.get("display_name", _mid),
+                                        }
+                                except Exception:
+                                    pass
                             await websocket.send_json({
                                 "type": "tool_call",
                                 "name": func_name,
                                 "args": args,
+                                **tool_meta,
                             })
 
                             result = execute_tool(func_name, args)
